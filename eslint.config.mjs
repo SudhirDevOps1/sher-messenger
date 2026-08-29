@@ -15,6 +15,7 @@ export default defineConfig([
       "react-hooks/immutability": "off",
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/refs": "off",
+      "react-hooks/purity": "off",
       /** Internal anchors preserve normal open-in-new-tab behavior throughout docs. */
       "@next/next/no-html-link-for-pages": "off",
       /** Product copy deliberately uses natural quotes in long technical prose. */
