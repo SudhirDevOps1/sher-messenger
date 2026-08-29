@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 ## [Unreleased]
 
 ### Added
+
+## [0.1.1] - 2026-08-29
+### Fixed
+- **Relay bootstrap** — `POST /api/ked/bootstrap-invite` now self-disables after first mint (`counts` + `listInvites` guard, `src/app/api/ked/[slug]/route.ts:440`), second call returns `409` even before first signup (fixes `bootstrap self-disables once an identity exists`).
+- **Invite gate conformance** — CI keeps `SHER_INVITE_ONLY=1` and harness reads `GET /api/ked/version` `inviteOnly` to expect `403` (gated) or `200` (open), fixing `invite gate blocks signup without a code` when `SHER_INVITE_ONLY=0` (`.github/workflows/ci.yml:53`, `src/app/api/dev-selftest/route.ts:274`).
+
+### Added
 - **Admin console** (`/admin`, RBAC-gated server-side): dashboard counters, user list with
   block / unblock / promote / demote / purge, invite manager, SYSTEM broadcast, content-free audit trail.
 - **Invite-only signup.** Codes are stored as SHA-256, single-use by default, with expiry and role
