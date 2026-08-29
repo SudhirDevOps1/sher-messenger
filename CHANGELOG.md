@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## [0.2.0](https://github.com/SudhirDevOps1/sher-messenger/compare/v0.1.0...v0.2.0) (2026-08-29)
+
+
+### Features
+
+* initial commit — sher-messenger zero-knowledge messenger ([51a9640](https://github.com/SudhirDevOps1/sher-messenger/commit/51a964092a704822d9c51308851ff7ff1d93730f))
+
+
+### Bug Fixes
+
+* add package-lock.json for CI (npm ci) ([168defc](https://github.com/SudhirDevOps1/sher-messenger/commit/168defcb5391f21b1ad6ba024d8e42d0c59043f8))
+* **ci:** allow CC0-1.0 for speed-highlight (transitive) ([bab4c31](https://github.com/SudhirDevOps1/sher-messenger/commit/bab4c317217b8f0a02062bb36485167ad2922611))
+* **ci:** allow LGPL-3.0 for @img/sharp-libvips (Next.js sharp transitive dep) ([d7fc20e](https://github.com/SudhirDevOps1/sher-messenger/commit/d7fc20e0cfe6e19d9da3aecf2229fe20a12698d3))
+* **ci:** allow UNLICENSED and set package license MIT for root ([cb80ab3](https://github.com/SudhirDevOps1/sher-messenger/commit/cb80ab3e3ce47330710d66157847bf3a99011ea9))
+* **ci:** make OSV scan non-blocking and bump postcss to 8.5.26 (fix GHSA-6g55/ qx2v) ([7247297](https://github.com/SudhirDevOps1/sher-messenger/commit/7247297efedfe73c98bd15024d71b333669c4e81))
+* **lint:** disable react-hooks/purity for Date.now in render (pollAge, posture) ([c4cfb8f](https://github.com/SudhirDevOps1/sher-messenger/commit/c4cfb8f3001dc36e0cb1a46f5ffe27f7133a2390))
+* **relay:** bootstrap self-disables after first mint and keep invite gate on in CI ([f90c95c](https://github.com/SudhirDevOps1/sher-messenger/commit/f90c95c0cfca9d876e0b98799204e716cecccf5e))
+* **security:** add .gitleaks.toml allowlist for false positives (TURSO env names, crypto comments) ([6791a4f](https://github.com/SudhirDevOps1/sher-messenger/commit/6791a4f3f04d439cd1ef2eadf8ddaf27c6abd2c1))
+* **security:** correct .gitleaks.toml syntax (allowlist is map not slice) ([ca46a6c](https://github.com/SudhirDevOps1/sher-messenger/commit/ca46a6c517ba0957a80f76cd8c1f0463a12f00c1))
+
 ## [Unreleased]
 
 ### Added
