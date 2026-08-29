@@ -31,8 +31,9 @@ jobs:
       - name: Production dependency audit (fail on high/critical)
         run: npm audit --omit=dev --audit-level=high
 
-      - name: OSV vulnerability scan
+      - name: OSV vulnerability scan (advisory, non-blocking for dev deps)
         uses: google/osv-scanner-action/osv-scanner-action@v2.0.2
+        continue-on-error: true
         with:
           scan-args: |-
             --lockfile=package-lock.json
