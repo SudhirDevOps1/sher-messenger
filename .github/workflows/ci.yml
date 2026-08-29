@@ -51,7 +51,7 @@ jobs:
       - name: Start relay and run conformance suite
         env:
           SHER_RATE_LIMIT: off   # CI shares one IP; production keeps buckets on
-          SHER_INVITE_ONLY: "0"
+          SHER_INVITE_ONLY: "1"  # keep invite gate on — bootstrap provisions the invite on a clean DB
         run: |
           npm start & 
           for i in $(seq 1 30); do curl -sf localhost:3000/api/ked/healthz >/dev/null && break; sleep 2; done

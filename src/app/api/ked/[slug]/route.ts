@@ -439,7 +439,10 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
    */
   if (path === "bootstrap-invite") {
     const c = await store.counts();
-    if (c.users > 0) return err("bootstrap is closed: this relay already has identities — use /admin to mint invites", 409);
+    // one-time mint: close if any user exists OR an invite has already been minted
+    // (the latter makes the immediate second call fail even before the first signup)
+    const existing = await store.listInvites(1);
+    if (c.users > 0 || existing.length > 0) return err("bootstrap is closed: this relay already has identities — use /admin to mint invites", 409);
     const raw = (randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "")).slice(0, 32).toLowerCase();
     await store.createInvite({
       id: `i_${randomUUID().replace(/-/g, "").slice(0, 16)}`,

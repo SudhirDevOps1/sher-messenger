@@ -271,16 +271,18 @@ export async function GET(req: Request) {
     } else {
       add("invite supplied via query param (operator path)", true, `code ${inviteCode.slice(0, 6)}…`);
     }
+    const versionProbe = await call("version");
+    const inviteOnly = versionProbe.data?.inviteOnly !== false;
     const gateProbe = await call("register", {
       method: "POST",
       body: JSON.stringify({ username: `gateless-${Date.now().toString(36)}`, vaultSalt: "c2FsdA==", vaultBlob: "v1.bm9uY2U=.Y3Q=", authSalt: "x", authVerifier: "v".repeat(44), ikPub: "BKik", spkPub: "BKspk", spkSig: "s", opkPubs: ["o"] }),
     });
     add(
       "invite gate blocks signup without a code",
-      gateProbe.status === 403,
+      inviteOnly ? gateProbe.status === 403 : gateProbe.status === 200,
       gateProbe.status === 429
         ? `HTTP 429 — rate limiter fired first (also correct); set SHER_RATE_LIMIT=off in CI`
-        : `HTTP ${gateProbe.status}: ${gateProbe.data?.error ?? ""}`,
+        : `HTTP ${gateProbe.status}: ${gateProbe.data?.error ?? ""} (inviteOnly=${inviteOnly})`,
     );
 
     const tag = Date.now().toString(36);
