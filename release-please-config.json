@@ -3,7 +3,7 @@
     ".": {
       "release-type": "node",
       "package-name": "sher-messenger",
-      "changelog-path": "CHANGELOG.md",
+      "changelog-path": "docs/CHANGELOG.md",
       "include-component-in-tag": false,
       "include-v-in-tag": true
     }
