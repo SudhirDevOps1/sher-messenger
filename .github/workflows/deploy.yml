@@ -1,0 +1,129 @@
+name: Deploy
+
+on:
+  push:
+    branches: [staging, main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "all | cloudflare | vercel | netlify"
+        required: true
+        default: all
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx next typegen && npx tsc --noEmit --pretty false && npm run build
+      - id: env
+        run: echo "name=${{ github.ref_name == 'main' && 'production' || 'staging' }}" >> "$GITHUB_OUTPUT"
+
+  cloudflare:
+    needs: preflight
+    if: ${{ vars.DEPLOY_CLOUDFLARE == 'true' && (inputs.target == 'all' || inputs.target == 'cloudflare' || inputs.target == '') }}
+    runs-on: ubuntu-latest
+    environment: ${{ needs.preflight.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Build OpenNext worker
+        run: npx opennextjs-cloudflare build
+      - name: Deploy staging
+        if: ${{ github.ref_name == 'staging' }}
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env staging
+        env:
+          TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+      - name: Deploy production
+        if: ${{ github.ref_name == 'main' }}
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+        env:
+          TURSO_TOKEN: ${{ secrets.TURSO_TOKEN }}
+      - name: Post-deploy smoke
+        if: ${{ vars.CLOUDFLARE_APP_URL != '' }}
+        run: |
+          curl --retry 8 --retry-delay 3 --fail "${{ vars.CLOUDFLARE_APP_URL }}/api/ked/healthz"
+          curl --retry 8 --retry-delay 3 --fail "${{ vars.CLOUDFLARE_APP_URL }}/api/ked/readyz"
+          curl --retry 8 --retry-delay 3 --fail "${{ vars.CLOUDFLARE_APP_URL }}/api/ked/version"
+
+  vercel:
+    needs: preflight
+    if: ${{ vars.DEPLOY_VERCEL == 'true' && (inputs.target == 'all' || inputs.target == 'vercel' || inputs.target == '') }}
+    runs-on: ubuntu-latest
+    environment: ${{ needs.preflight.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm i -g vercel@latest
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=${{ github.ref_name == 'main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - run: vercel build ${{ github.ref_name == 'main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - id: deploy
+        run: echo "url=$(vercel deploy --prebuilt ${{ github.ref_name == 'main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - run: curl --retry 8 --retry-delay 3 --fail "${{ steps.deploy.outputs.url }}/api/ked/readyz"
+
+  netlify:
+    needs: preflight
+    if: ${{ vars.DEPLOY_NETLIFY == 'true' && (inputs.target == 'all' || inputs.target == 'netlify' || inputs.target == '') }}
+    runs-on: ubuntu-latest
+    environment: ${{ needs.preflight.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm i -g netlify-cli@latest
+      - id: deploy
+        run: |
+          FLAGS="--build --json"
+          [ "${{ github.ref_name }}" = "main" ] && FLAGS="$FLAGS --prod"
+          netlify deploy $FLAGS --auth "${{ secrets.NETLIFY_AUTH_TOKEN }}" --site "${{ secrets.NETLIFY_SITE_ID }}" > deploy.json
+          echo "url=$(node -e "const j=require('./deploy.json');console.log(j.deploy_url || j.url)")" >> "$GITHUB_OUTPUT"
+      - run: curl --retry 8 --retry-delay 3 --fail "${{ steps.deploy.outputs.url }}/api/ked/readyz"
+
+  result:
+    needs: [preflight, cloudflare, vercel, netlify]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment summary
+        run: |
+          echo "## Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Environment: ${{ needs.preflight.outputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Cloudflare: ${{ needs.cloudflare.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Vercel: ${{ needs.vercel.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Netlify: ${{ needs.netlify.result }}" >> "$GITHUB_STEP_SUMMARY"

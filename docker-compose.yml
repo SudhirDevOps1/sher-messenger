@@ -1,0 +1,32 @@
+services:
+  ked:
+    build: .
+    image: sher-messenger:latest
+    container_name: sher-messenger
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # pick ONE backend. SQLite file is enough for a personal deployment.
+      SHER_SQLITE_PATH: /data/sher-messenger.db
+      # DATABASE_URL: postgres://user:pass@host:5432/ked?sslmode=require
+      # TURSO_URL: libsql://your-db.turso.io
+      # TURSO_TOKEN: eyJhbGciOi...
+      # SHER_DB: memory            # volatile, demo only
+    volumes:
+      - ked-data:/data
+
+  # optional: uncomment for a self-hosted Postgres instead of SQLite
+  # db:
+  #   image: postgres:17-alpine
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: ked
+  #     POSTGRES_PASSWORD: change-me
+  #     POSTGRES_DB: ked
+  #   volumes:
+  #     - ked-pg:/var/lib/postgresql/data
+
+volumes:
+  ked-data:
+  # ked-pg:

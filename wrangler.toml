@@ -1,0 +1,39 @@
+# SHER Messenger — Cloudflare Workers / OpenNext
+# Official shape: https://developers.cloudflare.com/workers/frameworks/framework-guides/nextjs/
+# Build: npx opennextjs-cloudflare build
+# Deploy: npx wrangler deploy
+# Secrets: npx wrangler secret put TURSO_TOKEN
+
+name = "sher-messenger"
+main = ".open-next/worker.js"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[vars]
+BACKEND_TARGET = "workers"
+# Zero-config one-click deploy: volatile but fully functional. Add TURSO_URL and
+# TURSO_TOKEN in the dashboard, then switch these two values to libsql/turso for
+# persistence. The UI exposes the active adapter so this can never be mistaken.
+DB_TARGET = "memory"
+SHER_DB = "memory"
+SHER_INVITE_ONLY = "1"
+SHER_RATE_LIMIT = "on"
+
+[observability]
+enabled = false
+
+[env.staging]
+name = "sher-messenger-staging"
+workers_dev = true
+
+[env.staging.vars]
+BACKEND_TARGET = "workers"
+DB_TARGET = "memory"
+SHER_DB = "memory"
+SHER_INVITE_ONLY = "1"
+SHER_RATE_LIMIT = "on"

@@ -1,0 +1,33 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Release provenance summary
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## SHER Messenger release
+          - Commit: \`${GITHUB_SHA}\`
+          - Tag: \`${{ steps.release.outputs.tag_name }}\`
+          - Crypto conformance: required by protected-main CI
+          - Adapter matrix: Node/Postgres · libSQL HTTP · SQLite · memory
+          - Audit status: WebCrypto primitives; composition not professionally audited
+          EOF

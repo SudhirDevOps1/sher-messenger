@@ -1,0 +1,34 @@
+# Render Blueprint — one-click deploy.
+# "Deploy to Render" reads this file automatically when you connect the repo.
+# Free tier: 750 hrs/month, sleeps after 15 min idle, 5GB egress — fine for a personal relay.
+#
+# Note: Render's free web services sleep and have no persistent disk on the free plan, so this
+# blueprint defaults to SHER_DB=memory. Point DATABASE_URL or TURSO_URL at an external free-tier
+# database (Neon / Turso) in the Render dashboard for data that survives a sleep/restart cycle.
+services:
+  - type: web
+    name: sher-messenger
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/ked/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: SHER_INVITE_ONLY
+        value: "1"
+      - key: SHER_DB
+        value: memory
+      - key: DATABASE_URL
+        sync: false
+      - key: TURSO_URL
+        sync: false
+      - key: TURSO_TOKEN
+        sync: false
+      - key: OPERATOR_EMAIL
+        sync: false

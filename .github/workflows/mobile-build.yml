@@ -1,0 +1,44 @@
+name: Mobile Build (Phase 4 Stub)
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-contracts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [android, ios-pwa]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Verify platform-neutral adapter contracts compile
+        run: npx tsc --noEmit --pretty false
+      - name: Phase status
+        run: |
+          echo "## ${{ matrix.platform }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Phase 4 native scaffolding is intentionally not initialized yet." >> "$GITHUB_STEP_SUMMARY"
+          echo "KeyStoreAdapter, PushAdapter, PlatformAdapter and deep-link contracts are reserved in packages/crypto-core." >> "$GITHUB_STEP_SUMMARY"
+          echo "When Phase 4 is activated this job will run Gradle assembleDebug/assembleRelease." >> "$GITHUB_STEP_SUMMARY"
+
+  # This never runs today. Keeping the exact signing secret names in the workflow
+  # prevents an accidental ad-hoc signing scheme when native packaging is enabled.
+  android-signing-contract:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          test -n "${ANDROID_KEYSTORE_B64}"
+          test -n "${KEYSTORE_ALIAS}"
+          test -n "${KEYSTORE_PASSWORD}"
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

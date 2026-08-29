@@ -1,0 +1,21 @@
+name: Conventional Commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Lint PR title (squash merge becomes this commit)
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: echo "$TITLE" | npx --yes @commitlint/cli@19 --config commitlint.config.mjs
