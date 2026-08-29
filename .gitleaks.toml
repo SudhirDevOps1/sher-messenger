@@ -1,0 +1,23 @@
+title = "sher-messenger gitleaks config"
+
+[extend]
+useDefault = true
+
+# False positives: env var names in UI (not values) and crypto comments
+[[allowlist]]
+description = "deploy page lists env var names, not secrets"
+path = '''src/app/deploy/page\.tsx'''
+regexes = ['''TURSO_TOKEN''', '''TURSO_URL''']
+
+[[allowlist]]
+description = "primitives comment about PBKDF2 iterations"
+path = '''src/lib/primitives\.ts'''
+regexes = ['''vault: 750k''', '''750k''']
+
+[[allowlist]]
+description = "protocol hkdf2 variable names"
+path = '''src/lib/protocol\.ts'''
+regexes = ['''hkdf2''', '''chainKey''', '''rootKey''']
+
+# Also allow the specific fingerprints reported by CI (commit cb80ab3)
+# Fingerprint format: <commit>:<file>:<rule>:<line> - we allowlist by path instead
