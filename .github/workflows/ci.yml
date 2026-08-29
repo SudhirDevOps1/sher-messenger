@@ -68,7 +68,7 @@ jobs:
         run: |
           npm i -g @cyclonedx/cyclonedx-npm
           cyclonedx-npm --output-file sbom.json --output-format json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: sbom, path: sbom.json }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: { name: selftest, path: selftest.json }
