@@ -210,7 +210,7 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
   };
 
   return (
-    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+    <div id="ephemeral-room-box" className="mt-4 grid gap-4 lg:grid-cols-2 scroll-mt-28">
       {/* Create ephemeral room */}
       <div className="panel relative p-5">
         <span className="glowline" />
@@ -697,12 +697,23 @@ export default function Landing({
                 </p>
               </div>
               <button
-                className="btn btn-primary btn-sm"
+                className="btn btn-primary btn-sm glow-acc"
                 onClick={() => {
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  const el = document.getElementById("ephemeral-room-box");
+                  if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    const inp = el.querySelector("input");
+                    if (inp) {
+                      setTimeout(() => (inp as HTMLInputElement).focus(), 300);
+                    }
+                  } else {
+                    const scrollContainer = document.querySelector(".overflow-y-auto") || document.querySelector(".shell");
+                    if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: "smooth" });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }
                 }}
               >
-                <Icon name="spark" size={13} /> {lang === "hi" ? "ऊपर चैट रूम खोलें" : "Go to Chat Room ↑"}
+                <Icon name="spark" size={13} /> {lang === "hi" ? "ऊपर चैट रूम खोलें ↑" : "Go to Chat Room ↑"}
               </button>
             </div>
           </div>
