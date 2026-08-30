@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type HistMsg, type Room, countdown, fmtBytes, fmtTime } from "@/lib/client";
 import type { KedClient } from "@/lib/client";
 import { Chip, Copyable, EmojiPicker, FireOverlay, Icon, Identicon, TtlRing, useNow } from "./ui";
+import { useI18n } from "@/lib/i18n";
 
 /* ------------------------------------------------------------------ shared */
 
@@ -390,6 +391,7 @@ export function Sidebar({
   onNewGroup: () => void;
   lastOpen: Record<string, number>;
 }) {
+  const { lang } = useI18n();
   const [q, setQ] = useState("");
   // The encrypted-vault store is mutable and drives rerenders through subscribe();
   // sorting this small personal room list directly keeps it correct without memo identity traps.
@@ -414,31 +416,38 @@ export function Sidebar({
           <input
             id="ked-search"
             className="input mono pl-8 text-[12px]"
-            placeholder="filter rooms · search decrypted history"
+            placeholder={lang === "hi" ? "कमरे खोजें · संदेश इतिहास" : "filter rooms · search decrypted history"}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
         <div className="row gap-2">
           <button className="btn btn-sm flex-1 justify-center" onClick={onNewContact}>
-            <Icon name="plus" size={13} /> New DM
+            <Icon name="plus" size={13} /> {lang === "hi" ? "नया DM" : "New DM"}
           </button>
           <button className="btn btn-sm flex-1 justify-center" onClick={onNewGroup}>
-            <Icon name="users" size={13} /> Group
+            <Icon name="users" size={13} /> {lang === "hi" ? "समूह" : "Group"}
           </button>
         </div>
       </div>
 
       <div className="scroll min-h-0 flex-1 p-2">
-        <div className="kicker px-1.5 py-2">conversations</div>
+        <div className="kicker px-1.5 py-2">{lang === "hi" ? "बातचीत" : "conversations"}</div>
         {filtered.length === 0 ? (
           <div className="grid gap-2 px-2 py-6">
             <p className="mono text-[11px] leading-relaxed text-[var(--ink-faint)]">
-              Koi room nahi hai abhi. Upar <b className="text-[var(--ink-dim)]">New DM</b> se handle jodo (usko isi relay par registered
-              hona hoga) — room id dono ki public keys se banegi, relay ko naam bhi nahi milega.
+              {lang === "hi" ? (
+                <>
+                  अभी कोई रूम नहीं है। ऊपर <b className="text-[var(--ink-dim)]">नया DM</b> से संपर्क जोड़ें (उसे इसी रिले पर पंजीकृत होना चाहिए)।
+                </>
+              ) : (
+                <>
+                  No active rooms yet. Use <b className="text-[var(--ink-dim)]">New DM</b> above to start a conversation with a registered handle.
+                </>
+              )}
             </p>
             <a className="btn btn-sm justify-center" href="/guide" target="_blank" rel="noreferrer">
-              <Icon name="spark" size={13} /> Guide: message kaise karein
+              <Icon name="spark" size={13} /> {lang === "hi" ? "मार्गदर्शिका पढ़ें" : "Read User Guide"}
             </a>
           </div>
         ) : (

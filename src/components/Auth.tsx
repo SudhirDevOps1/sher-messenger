@@ -132,10 +132,10 @@ export default function Auth({
               <Icon name="lock" size={12} /> ciphertext rows: {relay?.ciphertextRows ?? "—"}
             </Chip>
             <a className="chip" href="/guide">
-              <Icon name="spark" size={12} /> Guide: kaise chalega
+              <Icon name="spark" size={12} /> Guide & Handbook
             </a>
             <a className="chip" href="/plan">
-              <Icon name="terminal" size={12} /> PRD + threat model
+              <Icon name="terminal" size={12} /> PRD + Threat Model
             </a>
           </div>
         </div>
@@ -147,7 +147,7 @@ export default function Auth({
             <div className="mb-4 rounded-xl border border-[rgba(56,189,248,.35)] bg-[rgba(56,189,248,.08)] p-3">
               <div className="row items-center justify-between gap-2 flex-wrap">
                 <span className="mono text-[11px] text-[#bae6fd]">
-                  ⚡ <b>Bina password instant chat karna hai?</b>
+                  ⚡ <b>Prefer 1-click ephemeral chat without a password?</b>
                 </span>
                 <button type="button" className="btn btn-sm !bg-sky-500/20 !text-sky-300 hover:!bg-sky-500/30" onClick={onBack}>
                   Instant Ephemeral Room ➔
@@ -159,7 +159,7 @@ export default function Auth({
             <div className="row mb-4 items-start gap-2 rounded-xl border border-[rgba(79,240,182,.35)] bg-[rgba(79,240,182,.08)] p-3 text-[11.5px] text-[#a9ffe2]">
               <Icon name="key" size={14} />
               <span className="mono min-w-0 break-all">
-                invite detected — <b>{inviteCode.slice(0, 10)}…</b> (relay par sirf iska SHA-256 jata hai)
+                Invite detected — <b>{inviteCode.slice(0, 10)}…</b> (only SHA-256 hash sent to relay)
               </span>
             </div>
           ) : relay?.users === 0 && onBootstrap ? (
@@ -167,21 +167,21 @@ export default function Auth({
               <div className="row items-start gap-2 text-[11.5px] text-[#a9ffe2]">
                 <Icon name="spark" size={14} />
                 <span className="mono min-w-0">
-                  Fresh relay detected — koi identity nahi hai. Aap pehle operator ho sakte ho.
+                  Fresh relay detected — zero identities registered. You can initialize as the first operator.
                 </span>
               </div>
               <button className="btn btn-primary btn-sm mt-2.5 w-full justify-center" type="button" onClick={() => void onBootstrap()}>
-                <Icon name="key" size={13} /> Initialize private relay (one-time)
+                <Icon name="key" size={13} /> Initialize Private Relay (One-Time)
               </button>
               <p className="mono mt-1.5 text-[9.5px] leading-relaxed text-[var(--ink-faint)]">
-                Ek 1-hour admin invite mint hoga. Pehli identity ke baad ye button server-side hamesha ke liye band ho jata hai.
+                Mints a 1-hour admin invite token. This button is permanently disabled after the first identity is created.
               </p>
             </div>
           ) : (
             <div className="row mb-4 items-start gap-2 rounded-xl border border-[rgba(255,190,85,.3)] bg-[rgba(255,190,85,.07)] p-3 text-[11.5px] text-[#ffdca6]">
               <Icon name="alert" size={14} />
               <span className="mono">
-                Ye relay <b>invite-only</b> hai. Operator se invite link lo (<b>/?invite=…</b>). Open signup ki zaroorat nahi.
+                This relay is <b>invite-only</b>. Request an invite link from the operator (<b>/?invite=…</b>).
               </span>
             </div>
           )}

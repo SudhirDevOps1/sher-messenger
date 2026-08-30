@@ -603,23 +603,49 @@ export default function Landing({
         <Reveal>
           <div className="panel relative overflow-hidden p-6 md:p-8">
             <span className="glowline" />
-            <div className="kicker">extreme privacy — public, no login</div>
-            <h2 className="mt-2 text-[clamp(22px,3.6vw,30px)] font-bold tracking-[-0.02em]">Free 30-minute rooms — code se enter, bina login ke.</h2>
+            <div className="kicker">
+              {lang === "hi" ? "अत्यधिक गोपनीयता — बिना लॉगिन" : "Extreme Privacy — Public, Zero Login"}
+            </div>
+            <h2 className="mt-2 text-[clamp(22px,3.6vw,30px)] font-bold tracking-[-0.02em]">
+              {lang === "hi"
+                ? "अस्थायी रूम — 6-अक्षरों के कोड से तुरंत प्रवेश, बिना पासवर्ड।"
+                : "Ephemeral Rooms — Join via 6-character code, zero authentication."}
+            </h2>
             <p className="mt-2 max-w-[70ch] text-[13px] leading-relaxed text-[var(--ink-dim)]">
-              Web public khula rahega, <code>/admin</code> sirf <code>ADMIN_EMAIL</code>+<code>ADMIN_PASSWORD</code> env se khulta (bearer + env double-gate). Koi user aaya, <b>room banaya</b> → creator <code>maxUsers 2-30</code> + <code>30m</code> hard cap set karta → <b>6-char code</b> milta → code baanto, dusra user code dalte hi `rooms/join` → chat start. 30m baad `shredExpired` + `burnDue` se `body=NULL` server + local history blur, browser band karte hi `beforeunload` `sessionStorage` wipe.
+              {lang === "hi"
+                ? "कमरा बनाएं, प्रतिभागियों की संख्या (2-30) और स्वतः नष्ट समय सीमा (30 मिनट) चुनें। 6-अक्षरों का कोड साथी के साथ साझा करें। समय सीमा समाप्त होते ही सारा डेटा सर्वर और ब्राउज़र से हार्ड-डिलीट हो जाता है।"
+                : "Create a disposable room, configure capacity (2-30 participants), and set an auto-burn expiration timer (e.g. 30m). Share the generated 6-character code. Once time expires, all ciphertext rows are hard-deleted from relay storage and client memory."}
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
-                <div className="kicker">screenshot / download</div>
-                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">`.no-screenshot` + watermark + `copy/contextmenu` block + `PrintScreen` toast + `blur while unfocused`. OS photo 100% nahi rukta — friction + blur-after-download + ledger flag.</p>
+                <div className="kicker">
+                  {lang === "hi" ? "स्क्रीनशॉट सुरक्षा" : "Screenshot Shield"}
+                </div>
+                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">
+                  {lang === "hi"
+                    ? "PrintScreen और स्क्रीनशॉट डिटेक्शन, फ़ोकस खोने पर स्वतः ब्लर और वॉटरमार्क सुरक्षा।"
+                    : "PrintScreen shortcut warning, auto-blur on window unfocus, and dynamic privacy watermark protection."}
+                </p>
               </div>
               <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
-                <div className="kicker">localStorage kya</div>
-                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">ked.vault handle = seal PBKDF2 750k AES-256-GCM n c salt at + ked.resume.v1 tab-only. Clear cache to ls.del plus ss.clear to no vault blob.</p>
+                <div className="kicker">
+                  {lang === "hi" ? "लोकल स्टोरेज वॉल्ट" : "Local Storage Vault"}
+                </div>
+                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">
+                  {lang === "hi"
+                    ? "PBKDF2 750k चक्र + AES-256-GCM द्वारा स्थानीय रूप से एन्क्रिप्टेड निजी कुंजियाँ।"
+                    : "Client-side private keys sealed via PBKDF2 (750,000 rounds) + AES-256-GCM master vault key."}
+                </p>
               </div>
               <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
-                <div className="kicker">clear cache ke baad</div>
-                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">Vault local se gaya, relay pe sirf `ciphertext` bacha — `passphrase` bina `unreadable`. Backup se restore ya naya identity.</p>
+                <div className="kicker">
+                  {lang === "hi" ? "शून्य-ज्ञान गारंटी" : "Zero-Knowledge Guarantee"}
+                </div>
+                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">
+                  {lang === "hi"
+                    ? "रिले पर केवल सिफरटेक्स्ट जाता है। पासफ़्रेज़ के बिना संदेश पढ़ना असंभव है।"
+                    : "Relay only stores encrypted ciphertext blobs. Cryptographically unreadable without client keys."}
+                </p>
               </div>
             </div>
           </div>

@@ -495,8 +495,8 @@ export default function Page() {
           >
             <Icon name="alert" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "पैनिक वाइप" : "Panic"}</span>
           </button>
-          <a className="btn btn-sm" href="/guide" title="Kaise kaam karta hai + deploy guide">
-            <Icon name="spark" size={13} /> <span className="hidden sm:inline">Guide</span>
+          <a className="btn btn-sm" href="/guide" title={lang === "hi" ? "दस्तावेज़ एवं मार्गदर्शिका" : "User Guide & Deploy Handbook"}>
+            <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "मार्गदर्शिका" : "Guide"}</span>
           </a>
           <a className="btn btn-sm" href="/plan" title="PRD + protocol spec">
             <Icon name="doc" size={13} /> <span className="hidden sm:inline">Plan</span>
@@ -761,20 +761,45 @@ export default function Page() {
 
       <SealDetails open={!!seal} onClose={() => setSeal(null)} msg={seal} client={client} />
 
-      <Modal open={welcome} onClose={() => setWelcome(false)} title="Welcome to SHER Messenger" icon="shield" wide>
+      <Modal
+        open={welcome}
+        onClose={() => setWelcome(false)}
+        title={lang === "hi" ? "शेर मैसेंजर में आपका स्वागत है" : "Welcome to SHER Messenger"}
+        icon="shield"
+        wide
+      >
         <div className="grid gap-4">
           <p className="text-[13.5px] leading-relaxed text-[var(--ink-dim)]">
-            Ye ekdum jaana-pehchana chalega — bas farq itna hai ki <b className="text-[var(--ink)]">message aapke tab se nikalne se pehle hi
-            band ho chuka hota hai</b>. Server ko sirf ciphertext milta hai, isliye DB chori hone par bhi kuch nahi padha ja sakta.
+            {lang === "hi" ? (
+              <>
+                यह मैसेजिंग अनुभव पूरी तरह सहज और निजी है — मुख्य अंतर यह है कि{" "}
+                <b className="text-[var(--ink)]">संदेश आपके डिवाइस से बाहर जाने से पहले ही पूरी तरह एन्क्रिप्ट हो जाता है</b>। सर्वर
+                को केवल सिफरटेक्स्ट प्राप्त होता है, इसलिए डेटाबेस से भी कोई संदेश नहीं पढ़ सकता।
+              </>
+            ) : (
+              <>
+                A familiar messaging experience with zero compromises:{" "}
+                <b className="text-[var(--ink)]">every message is sealed in your browser before it ever touches the wire</b>. The
+                relay only sees ciphertext, making data completely unreadable even in the event of a database breach.
+              </>
+            )}
           </p>
 
           <div className="grid gap-2.5 sm:grid-cols-2">
-            {[
-              { i: "key", t: "1 · Pehchaan ban gayi", d: "Aapki identity key + 24 one-time prekeys ban gaye. Private keys isi device par encrypted hain — server par sirf public material gaya." },
-              { i: "ghost", t: "2 · Sentry abhi pair ho raha hai", d: "Ek doosri ASLI identity isi tab mein chal rahi hai (apne keys, apni vault). Usse turant baat karo: help, audit, verify, threat model." },
-              { i: "plus", t: "3 · Dost kaise jodo", d: "Left rail → New DM → uska handle. Usko isi relay par registered hona hoga. Phir Inspector → Session → 60-digit safety number milao." },
-              { i: "flame", t: "4 · Auto-burn try karo", d: "Composer ke neeche TTL chips: 30s chuno, message bhejo, countdown ghoomte dekho. Dono taraf + relay par destroy ho jayega." },
-            ].map((c) => (
+            {(lang === "hi"
+              ? [
+                  { i: "key", t: "1 · पहचान निर्मित", d: "आपकी पहचान कुंजी (Identity Key) और 24 वन-टाइम प्री-की बन गई हैं। निजी कुंजियाँ केवल इसी डिवाइस पर सुरक्षित हैं।" },
+                  { i: "ghost", t: "2 · संतरी (Sentry) नोड", d: "एक वास्तविक स्वतंत्र पहचान इसी टैब में क्रियान्वित है। इससे तुरंत संवाद करें: help, audit, verify, threat model।" },
+                  { i: "plus", t: "3 · संपर्क जोड़ें", d: "बायाँ पैनल → नया DM → मित्र का यूज़रनेम दर्ज करें। फिर Inspector → Session में 60-अंकों का सुरक्षा नंबर सत्यापित करें।" },
+                  { i: "flame", t: "4 · स्वतः नष्ट (Auto-burn)", d: "मैसेज इनपुट के नीचे TTL समय सीमा चुनें (उदा. 30s)। समय पूरा होते ही संदेश दोनों पक्षों और सर्वर से स्वतः मिट जाएगा।" },
+                ]
+              : [
+                  { i: "key", t: "1 · Identity Created", d: "Your Identity Key and 24 one-time prekeys have been generated. Private keys remain safely on this device." },
+                  { i: "ghost", t: "2 · Sentry Node Active", d: "A live peer identity is active in this tab. Test messaging immediately with commands: help, audit, verify, threat model." },
+                  { i: "plus", t: "3 · Add Contacts", d: "Left rail → New DM → enter peer handle. Then verify the 60-digit safety number in Inspector → Session." },
+                  { i: "flame", t: "4 · Ephemeral Auto-Burn", d: "Select a TTL duration (e.g., 30s) below the composer. Messages automatically self-destruct from both clients and relay." },
+                ]
+            ).map((c) => (
               <div key={c.t} className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
                 <div className="row gap-2 text-[var(--acc)]">
                   <Icon name={c.i} size={15} />
@@ -788,20 +813,31 @@ export default function Page() {
           <div className="rounded-xl border border-[rgba(255,190,85,.32)] bg-[rgba(255,190,85,.07)] p-3">
             <div className="row gap-2 text-[var(--warn)]">
               <Icon name="alert" size={15} />
-              <span className="text-[12.5px] font-bold text-[var(--ink)]">Sabse zaroori: passphrase</span>
+              <span className="text-[12.5px] font-bold text-[var(--ink)]">
+                {lang === "hi" ? "अत्यंत महत्वपूर्ण: पासफ़्रेज़" : "Crucial Requirement: Passphrase"}
+              </span>
             </div>
             <p className="mono mt-1.5 text-[10.5px] leading-relaxed text-[var(--ink-dim)]">
-              Passphrase hi aapki chaabi hai — server ke paas uska koi hissa nahi hai, isliye <b>reset nahi ho sakta</b>. Abhi
-              password manager mein save karo ya kagaz par likh lo. Bhool gaye to history hamesha ke liye chali jayegi.
+              {lang === "hi" ? (
+                <>
+                  पासफ़्रेज़ ही आपकी मुख्य वॉल्ट कुंजी है — सर्वर पर इसका कोई हिस्सा नहीं रहता, इसलिए <b>पासवर्ड रीसेट संभव नहीं है</b>।
+                  इसे किसी सुरक्षित पासवर्ड मैनेजर में सेव कर लें या लिख लें।
+                </>
+              ) : (
+                <>
+                  Your passphrase is the vault key. The server stores zero key material, meaning{" "}
+                  <b>passphrase recovery is cryptographically impossible</b>. Please store it in a secure password manager.
+                </>
+              )}
             </p>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
             <button className="btn btn-primary justify-center" onClick={() => setWelcome(false)}>
-              <Icon name="lock" size={14} /> Samajh gaya — shuru karte hain
+              <Icon name="lock" size={14} /> {lang === "hi" ? "समझ गया — शुरू करें" : "Got It — Start Messaging"}
             </button>
             <a className="btn justify-center" href="/guide" target="_blank" rel="noreferrer">
-              <Icon name="doc" size={14} /> Poori guide padho (deploy bhi)
+              <Icon name="doc" size={14} /> {lang === "hi" ? "संपूर्ण मार्गदर्शिका पढ़ें" : "Read Complete Guide"}
             </a>
           </div>
         </div>
