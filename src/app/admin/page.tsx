@@ -110,12 +110,34 @@ export default function Admin() {
     try {
       const saved = localStorage.getItem("ked.admin.token");
       if (saved) setToken(saved);
+      else {
+        const sess = sessionStorage.getItem("ked.resume.v1");
+        if (sess) {
+          try {
+            const j = JSON.parse(sess) as { token?: string };
+            if (j?.token) setToken(j.token);
+          } catch {
+            if (sess && sess.length > 40) setToken(sess);
+          }
+        }
+      }
       const eok = sessionStorage.getItem("ked.admin.env");
       if (eok === "1") setEnvOk(true);
     } catch {
       /* ignore */
     }
   }, []);
+
+  // auto-try current session after env ok — no manual paste needed
+  useEffect(() => {
+    if (!envOk || token || me) return;
+    try {
+      const sess = sessionStorage.getItem("ked.resume.v1");
+      if (!sess) return;
+      const j = JSON.parse(sess) as { token?: string };
+      if (j?.token) setToken(j.token);
+    } catch {}
+  }, [envOk, token, me]);
 
   useEffect(() => {
     if (!token) return;
@@ -210,19 +232,46 @@ export default function Admin() {
               <span className="text-[15px] font-bold text-[var(--ink)]">Admin console</span>
             </div>
             <p className="mono mt-2.5 text-[11px] leading-relaxed text-[var(--ink-dim)]">
-              Env ok — ab Kisi <b>admin invite</b> se banayi gayi identity ka bearer token chahiye. Token sirf isi browser ke
-              localStorage mein rehta hai aur relay par plaintext store nahi hota (sirf SHA-256 hash).
+              Env verified ✓ — ab bas <b>one click</b>. Agar aap `sudhir01` se login hain to token auto fill hoga, nahi to Unlock vault se login karo.
             </p>
-            <input className="input mono mt-4" placeholder="bearer token" value={token} onChange={(e) => setToken(e.target.value.trim())} />
-            {err ? <div className="mono mt-2.5 text-[11px] leading-relaxed text-[#ffc2c9]">{err}</div> : null}
-            <div className="row mt-4 gap-2">
+            <div className="row mt-3 gap-2">
+              <button
+                className="btn btn-primary flex-1 justify-center"
+                onClick={async () => {
+                  try {
+                    const raw = sessionStorage.getItem("ked.resume.v1") || localStorage.getItem("ked.admin.token") || "";
+                    let t = "";
+                    try {
+                      const j = JSON.parse(raw) as { token?: string };
+                      t = j?.token ?? raw;
+                    } catch {
+                      t = raw;
+                    }
+                    if (t) setToken(t.trim());
+                    else setErr("koi session nahi — pehle app me sudhir01 se Unlock vault karo");
+                  } catch {
+                    setErr("session read failed");
+                  }
+                }}
+              >
+                <Icon name="bolt" size={13} /> Use current login
+              </button>
               <a className="btn flex-1 justify-center" href="/">
                 <Icon name="chevron" size={13} className="rotate-180" /> App
               </a>
-              <button className="btn btn-primary flex-1 justify-center" onClick={() => setTab("overview")} disabled={!token || !!me}>
+            </div>
+            <div className="mono mt-3 text-center text-[10px] text-[var(--ink-faint)]">— ya manual paste —</div>
+            <input className="input mono mt-2" placeholder="bearer token (auto bharega)" value={token} onChange={(e) => setToken(e.target.value.trim())} />
+            {err ? <div className="mono mt-2.5 text-[11px] leading-relaxed text-[#ffc2c9]">{err}</div> : null}
+            <div className="row mt-3 gap-2">
+              <button className="btn flex-1 justify-center" onClick={() => { try { sessionStorage.removeItem("ked.admin.env"); } catch {} setEnvOk(false); }}>
+                Back
+              </button>
+              <button className="btn btn-primary flex-1 justify-center" disabled={!token}>
                 Continue
               </button>
             </div>
+            <p className="mono mt-2 text-center text-[10px] text-[var(--ink-faint)]">Token sirf SHA-256 hash banke relay pe jata, plain kabhi store nahi.</p>
           </div>
         </div>
       </div>

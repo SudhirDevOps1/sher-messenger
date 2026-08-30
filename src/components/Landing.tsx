@@ -133,6 +133,68 @@ function DecryptDemo() {
   return <span className="mono">{display}</span>;
 }
 
+function FreeRoomDemo() {
+  const [name, setName] = useState("my-room");
+  const [max, setMax] = useState(5);
+  const [code, setCode] = useState<string | null>(null);
+  const [join, setJoin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const anon = () => {
+    try {
+      let a = localStorage.getItem("ked.anon.id");
+      if (!a) { a = `anon_${Math.random().toString(36).slice(2, 10)}`; localStorage.setItem("ked.anon.id", a); }
+      return a;
+    } catch { return `anon_${Math.random().toString(36).slice(2, 10)}`; }
+  };
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
+        <div className="kicker mb-2">create — bas naam</div>
+        <input className="input mono" value={name} onChange={(e) => setName(e.target.value.slice(0, 20))} placeholder="room name" />
+        <select className="input mono mt-2" value={max} onChange={(e) => setMax(Number(e.target.value))}>
+          {[2,3,5,10,15,30].map((n) => <option key={n} value={n}>{n} users max</option>)}
+        </select>
+        <button
+          className="btn btn-primary mt-2 w-full justify-center"
+          disabled={busy || !name.trim()}
+          onClick={async () => {
+            setBusy(true); setMsg(null);
+            try {
+              const r = await fetch("/api/ked/rooms/code", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nameEnc: name, maxUsers: max, ttlMs: 30*60_000, anonId: anon() }) }).then((x) => x.json());
+              if (r.code) { setCode(r.code); setMsg(`code: ${r.code} — share karo, 30m tak`); } else setMsg(r.error || "failed");
+            } catch (e) { setMsg((e as Error).message); }
+            setBusy(false);
+          }}
+        >
+          <Icon name="plus" size={13} /> Create room
+        </button>
+        {code ? <div className="mono mt-2 break-all rounded-lg border border-[rgba(79,240,182,.3)] bg-[rgba(79,240,182,.08)] p-2 text-[12px] text-[#a9ffe2]">code: <b>{code}</b></div> : null}
+        {msg ? <div className="mono mt-1 text-[10px] text-[var(--ink-faint)]">{msg}</div> : null}
+      </div>
+      <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
+        <div className="kicker mb-2">join — bas code</div>
+        <input className="input mono" value={join} onChange={(e) => setJoin(e.target.value.trim().toLowerCase())} placeholder="6-char code" maxLength={6} />
+        <button
+          className="btn mt-2 w-full justify-center"
+          disabled={busy || join.length < 6}
+          onClick={async () => {
+            setBusy(true); setMsg(null);
+            try {
+              const r = await fetch("/api/ked/rooms/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: join, anonId: anon() }) }).then((x) => x.json());
+              if (r.roomId) { setMsg(`joined ${r.roomId.slice(0,8)} — open app to chat`); window.location.href = "/"; } else setMsg(r.error || "invalid code");
+            } catch (e) { setMsg((e as Error).message); }
+            setBusy(false);
+          }}
+        >
+          Enter room
+        </button>
+        <p className="mono mt-2 text-[10px] text-[var(--ink-faint)]">30m me auto-burn, tab band = wipe, screenshot blur.</p>
+      </div>
+    </div>
+  );
+}
+
 const FEATURES: { icon: string; title: string; body: string }[] = [
   { icon: "key", title: "X3DH-lite handshake", body: "Identity key + signed prekey + one-time prekey pool. Sessions start even while the other person is offline." },
   { icon: "shield", title: "Double Ratchet", body: "A fresh key for every message, destroyed the instant it's used. Forward secrecy and post-compromise security, together." },
@@ -357,6 +419,18 @@ export default function Landing({
             ))}
           </div>
         </div>
+      </section>
+
+      {/* ---------------- free room — no login */}
+      <section className="mx-auto w-full max-w-[1180px] px-5 pb-10">
+        <Reveal>
+          <div className="panel p-6">
+            <div className="kicker">try now — no login</div>
+            <h3 className="mt-1 text-[16px] font-bold">Free 30m room — bas naam daalo, code baanto</h3>
+            <p className="mono mt-1 text-[11px] text-[var(--ink-faint)]">Bina handle/pass ke. Code se koi bhi join karega, maxUsers creator set karta, 30m me auto-burn, tab band karte hi wipe.</p>
+            <FreeRoomDemo />
+          </div>
+        </Reveal>
       </section>
 
       {/* ---------------- deploy strip */}
