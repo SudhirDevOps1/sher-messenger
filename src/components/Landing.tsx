@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Chip, Icon } from "./ui";
+import { useI18n, type Lang } from "@/lib/i18n";
+import { KedClient } from "@/lib/client";
 
 /**
  * The showcase / marketing surface. Pure CSS + IntersectionObserver animation —
@@ -133,63 +135,177 @@ function DecryptDemo() {
   return <span className="mono">{display}</span>;
 }
 
-function FreeRoomDemo() {
-  const [name, setName] = useState("my-room");
-  const [max, setMax] = useState(5);
-  const [code, setCode] = useState<string | null>(null);
-  const [join, setJoin] = useState("");
+function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => void }) {
+  const { lang, t } = useI18n();
+  const [createName, setCreateName] = useState("");
+  const [createUserName, setCreateUserName] = useState("");
+  const [maxUsers, setMaxUsers] = useState(5);
+  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [createdCode, setCreatedCode] = useState<string | null>(null);
+  
+  const [joinCode, setJoinCode] = useState("");
+  const [joinUserName, setJoinUserName] = useState("");
+  
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const anon = () => {
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
     try {
-      let a = sessionStorage.getItem("ked.anon.id");
-      if (!a) { a = `anon_${Math.random().toString(36).slice(2, 10)}`; sessionStorage.setItem("ked.anon.id", a); }
-      return a;
-    } catch { return `anon_${Math.random().toString(36).slice(2, 10)}`; }
+      const res = await KedClient.createGuestRoom({
+        displayName: createUserName.trim() || (lang === "hi" ? "अतिथि" : "Guest"),
+        roomName: createName.trim() || (lang === "hi" ? "अस्थायी चैट" : "Ephemeral Room"),
+        maxUsers,
+        ttlMs: durationMinutes * 60_000,
+      });
+      setCreatedCode(res.code);
+      if (onEnterGuest) {
+        onEnterGuest(res.client);
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const handleJoinRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCode || joinCode.length < 6) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await KedClient.joinGuestRoom({
+        displayName: joinUserName.trim() || (lang === "hi" ? "सहभागी" : "Member"),
+        code: joinCode.trim().toLowerCase(),
+      });
+      if (onEnterGuest) {
+        onEnterGuest(res.client);
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-      <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
-        <div className="kicker mb-2">create — bas naam</div>
-        <input className="input mono" value={name} onChange={(e) => setName(e.target.value.slice(0, 20))} placeholder="room name" />
-        <select className="input mono mt-2" value={max} onChange={(e) => setMax(Number(e.target.value))}>
-          {[2,3,5,10,15,30].map((n) => <option key={n} value={n}>{n} users max</option>)}
-        </select>
-        <button
-          className="btn btn-primary mt-2 w-full justify-center"
-          disabled={busy || !name.trim()}
-          onClick={async () => {
-            setBusy(true); setMsg(null);
-            try {
-              const r = await fetch("/api/ked/rooms/code", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nameEnc: name, maxUsers: max, ttlMs: 30*60_000, anonId: anon() }) }).then((x) => x.json());
-              if (r.code) { setCode(r.code); setMsg(`code: ${r.code} — share karo, 30m tak`); } else setMsg(r.error || "failed");
-            } catch (e) { setMsg((e as Error).message); }
-            setBusy(false);
-          }}
-        >
-          <Icon name="plus" size={13} /> Create room
-        </button>
-        {code ? <div className="mono mt-2 break-all rounded-lg border border-[rgba(79,240,182,.3)] bg-[rgba(79,240,182,.08)] p-2 text-[12px] text-[#a9ffe2]">code: <b>{code}</b></div> : null}
-        {msg ? <div className="mono mt-1 text-[10px] text-[var(--ink-faint)]">{msg}</div> : null}
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      {/* Create ephemeral room */}
+      <div className="panel relative p-5">
+        <span className="glowline" />
+        <div className="row gap-2 text-[var(--acc)]">
+          <Icon name="plus" size={17} />
+          <span className="text-[14px] font-bold text-[var(--ink)]">{t("createRoomTitle")}</span>
+        </div>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--ink-dim)]">
+          {t("createRoomDesc")}
+        </p>
+
+        <form onSubmit={handleCreateRoom} className="mt-4 grid gap-2.5">
+          <div>
+            <label className="kicker mb-1 block">{t("displayName")}</label>
+            <input
+              className="input"
+              value={createUserName}
+              onChange={(e) => setCreateUserName(e.target.value.slice(0, 24))}
+              placeholder={lang === "hi" ? "उदा. अमन" : "e.g. Alex"}
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="kicker mb-1 block">{t("roomCapacity")}</label>
+              <select
+                className="input"
+                value={maxUsers}
+                onChange={(e) => setMaxUsers(Number(e.target.value))}
+              >
+                {[2, 3, 5, 10, 15, 20, 30].map((n) => (
+                  <option key={n} value={n}>
+                    {n} {t("usersCount")}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="kicker mb-1 block">{t("roomDuration")}</label>
+              <select
+                className="input"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              >
+                {[5, 10, 15, 30, 60].map((m) => (
+                  <option key={m} value={m}>
+                    {m} {lang === "hi" ? "मिनट" : "Minutes"}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-primary mt-2 justify-center py-2.5"
+            disabled={busy || !createUserName.trim()}
+          >
+            <Icon name="plus" size={14} /> {t("createRoomBtn")}
+          </button>
+        </form>
       </div>
-      <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
-        <div className="kicker mb-2">join — bas code</div>
-        <input className="input mono" value={join} onChange={(e) => setJoin(e.target.value.trim().toLowerCase())} placeholder="6-char code" maxLength={6} />
-        <button
-          className="btn mt-2 w-full justify-center"
-          disabled={busy || join.length < 6}
-          onClick={async () => {
-            setBusy(true); setMsg(null);
-            try {
-              const r = await fetch("/api/ked/rooms/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: join, anonId: anon() }) }).then((x) => x.json());
-              if (r.roomId) { setMsg(`joined ${r.roomId.slice(0,8)} — open app to chat`); window.location.href = "/"; } else setMsg(r.error || "invalid code");
-            } catch (e) { setMsg((e as Error).message); }
-            setBusy(false);
-          }}
-        >
-          Enter room
-        </button>
-        <p className="mono mt-2 text-[10px] text-[var(--ink-faint)]">30m me auto-burn, tab band = wipe, screenshot blur.</p>
+
+      {/* Join ephemeral room */}
+      <div className="panel relative p-5">
+        <span className="glowline" />
+        <div className="row gap-2 text-[var(--acc-2)]">
+          <Icon name="key" size={17} />
+          <span className="text-[14px] font-bold text-[var(--ink)]">{t("joinRoomTitle")}</span>
+        </div>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--ink-dim)]">
+          {t("joinRoomDesc")}
+        </p>
+
+        <form onSubmit={handleJoinRoom} className="mt-4 grid gap-2.5">
+          <div>
+            <label className="kicker mb-1 block">{t("displayName")}</label>
+            <input
+              className="input"
+              value={joinUserName}
+              onChange={(e) => setJoinUserName(e.target.value.slice(0, 24))}
+              placeholder={lang === "hi" ? "उदा. राहुल" : "e.g. Sam"}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="kicker mb-1 block">{t("roomCode")}</label>
+            <input
+              className="input mono tracking-widest uppercase font-semibold"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.trim().toLowerCase())}
+              placeholder="e.g. a7f2k9"
+              maxLength={6}
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="btn mt-2 justify-center py-2.5"
+            disabled={busy || joinCode.length < 6 || !joinUserName.trim()}
+          >
+            <Icon name="chevron" size={14} /> {t("joinRoomBtn")}
+          </button>
+
+          {err ? (
+            <div className="mono mt-2 text-[11px] text-[#ffc2c9]">
+              {err}
+            </div>
+          ) : null}
+        </form>
       </div>
     </div>
   );
@@ -216,13 +332,13 @@ const STEPS: { n: string; t: string; d: string }[] = [
 export default function Landing({
   relay,
   onEnter,
+  onEnterGuest,
 }: {
   relay: { adapter?: string; users?: number; ciphertextRows?: number } | null;
   onEnter: () => void;
+  onEnterGuest?: (client: KedClient) => void;
 }) {
-  const [lang, setLang] = useState<"en" | "hi">(() => {
-    try { return (localStorage.getItem("ked.lang") as "en" | "hi") || "en"; } catch { return "en"; }
-  });
+  const { lang, setLang, t } = useI18n();
   return (
     <div className="relative z-[1] h-[100dvh] overflow-x-hidden overflow-y-auto scroll-smooth">
       {/* ---------------- nav */}
@@ -433,10 +549,14 @@ export default function Landing({
       <section className="mx-auto w-full max-w-[1180px] px-5 pb-10">
         <Reveal>
           <div className="panel p-6">
-            <div className="kicker">try now — no login</div>
-            <h3 className="mt-1 text-[16px] font-bold">Free 30m room — bas naam daalo, code baanto</h3>
-            <p className="mono mt-1 text-[11px] text-[var(--ink-faint)]">Bina handle/pass ke. Code se koi bhi join karega, maxUsers creator set karta, 30m me auto-burn, tab band karte hi wipe.</p>
-            <FreeRoomDemo />
+            <div className="kicker">{lang === "hi" ? "बिना लॉगिन तुरंत शुरू करें" : "Instant Ephemeral Chat — No Sign Up"}</div>
+            <h3 className="mt-1 text-[18px] font-bold">{lang === "hi" ? "अस्थायी चैट रूम — कोड साझा करें और 30 मिनट तक सुरक्षित बात करें" : "Zero-Login Ephemeral Rooms — Share code and chat securely"}</h3>
+            <p className="mt-1 text-[12.5px] text-[var(--ink-dim)]">
+              {lang === "hi"
+                ? "कोई ईमेल या पासवर्ड की आवश्यकता नहीं। रूम क्रिएटर समय और सदस्यों की सीमा तय कर सकता है। ब्राउज़र बंद करते ही सभी डेटा समाप्त।"
+                : "No email or password required. End-to-end encrypted in memory with automatic shredding on timer expiry or browser exit."}
+            </p>
+            <FreeRoomDemo onEnterGuest={onEnterGuest} />
           </div>
         </Reveal>
       </section>

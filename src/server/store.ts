@@ -158,6 +158,7 @@ export interface Store {
   listRoomCodes(roomId: string): Promise<RoomCodeRow[]>;
   revokeRoomCode(id: string): Promise<void>;
   deleteRoom(roomId: string): Promise<void>;
+  listActiveRooms(limit: number): Promise<{ id: string; type: string; createdAt: string; defaultTtl: number | null; membersCount: number; expiresAt: string | null; uses: number; maxUsers: number }[]>;
 
   listUsers(limit: number): Promise<(UserRow & { sessions: number })[]>;
   setUserRole(id: string, role: string): Promise<void>;
@@ -788,6 +789,27 @@ export class SqlStore implements Store {
     await this.run(`UPDATE ked_room_codes SET revoked_at=$2 WHERE room_id=$1`, [roomId, new Date().toISOString()]);
   }
 
+  async listActiveRooms(limit: number): Promise<{ id: string; type: string; createdAt: string; defaultTtl: number | null; membersCount: number; expiresAt: string | null; uses: number; maxUsers: number }[]> {
+    const rooms = await this.run(
+      `SELECT r.id, r.type, r.created_at, r.default_ttl,
+              (SELECT COUNT(*) FROM ked_room_members m WHERE m.room_id = r.id) as members_count,
+              rc.expires_at, rc.uses, rc.max_users
+       FROM ked_rooms r
+       LEFT JOIN ked_room_codes rc ON rc.room_id = r.id AND rc.revoked_at IS NULL
+       ORDER BY r.created_at DESC LIMIT ${Math.max(1, Math.min(100, limit))}`
+    );
+    return rooms.map((r) => ({
+      id: String(r.id),
+      type: String(r.type),
+      createdAt: String(r.created_at),
+      defaultTtl: r.default_ttl != null ? Number(r.default_ttl) : null,
+      membersCount: Number(r.members_count ?? 0),
+      expiresAt: (r.expires_at as string) ?? null,
+      uses: Number(r.uses ?? 0),
+      maxUsers: Number(r.max_users ?? 0),
+    }));
+  }
+
   async listUsers(limit: number): Promise<(UserRow & { sessions: number })[]> {
     const rows = await this.run(
       `SELECT ${this.USER_COLS},
@@ -1109,6 +1131,26 @@ class MemoryStore implements Store {
     this.membership.delete(roomId);
     this.rooms.delete(roomId);
     for (const [k, v] of [...this.roomCodesMem.entries()]) if (v.roomId === roomId) this.roomCodesMem.set(k, { ...v, revokedAt: new Date().toISOString() });
+  }
+
+  async listActiveRooms(limit: number) {
+    const out: { id: string; type: string; createdAt: string; defaultTtl: number | null; membersCount: number; expiresAt: string | null; uses: number; maxUsers: number }[] = [];
+    const roomsList = Array.from(this.rooms.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+    for (const r of roomsList) {
+      const rc = Array.from(this.roomCodesMem.values()).find((c) => c.roomId === r.id && !c.revokedAt);
+      const members = this.membership.get(r.id);
+      out.push({
+        id: r.id,
+        type: r.type,
+        createdAt: r.createdAt,
+        defaultTtl: r.defaultTtl ?? null,
+        membersCount: members ? members.size : 0,
+        expiresAt: rc?.expiresAt ?? null,
+        uses: rc?.uses ?? 0,
+        maxUsers: rc?.maxUsers ?? 0,
+      });
+    }
+    return out;
   }
   async listUsers(limit: number) {
     return [...this.users.values()]

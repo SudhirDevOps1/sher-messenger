@@ -48,6 +48,8 @@ import {
   encryptAttachment,
   groupDecrypt,
   groupEncrypt,
+  ephemeralEncrypt,
+  ephemeralDecrypt,
   ratchetDecrypt,
   ratchetEncrypt,
   verifyBundle,
@@ -283,6 +285,9 @@ export class KedClient {
   typingPeers: Record<string, number> = {};
   lastPoll = 0;
   stats: Record<string, unknown> | null = null;
+  isGuest = false;
+  roomCode?: string;
+  roomExpiresAt?: number;
 
   private keyBytes: Bytes | null = null;
   private keySalt = "";
@@ -305,6 +310,128 @@ export class KedClient {
   }
   private notify() {
     for (const fn of this.listeners) fn();
+  }
+
+  static async createGuestRoom(opts: { displayName: string; roomName?: string; maxUsers?: number; ttlMs?: number }): Promise<{ client: KedClient; code: string; roomId: string; expiresAt: string }> {
+    const c = new KedClient();
+    c.isGuest = true;
+    const name = opts.displayName.trim() || `Guest-${randomToken(4)}`;
+    c.username = name;
+    const anonUserId = `u_anon_${randomToken(12)}`;
+    c.userId = anonUserId;
+    c.data = emptyVault(name);
+    c.data.identity = await createIdentity();
+    c.keyBytes = rnd(32);
+    c.keySalt = b64e(rnd(16));
+    
+    const maxUsers = opts.maxUsers ?? 5;
+    const ttlMs = opts.ttlMs ?? 30 * 60_000;
+    const roomTitle = opts.roomName?.trim() || "Ephemeral Room";
+
+    const res = await req<{ ok: boolean; roomId: string; code: string; maxUsers: number; expiresAt: string }>(null, "rooms/code", {
+      method: "POST",
+      body: JSON.stringify({
+        anonId: anonUserId,
+        nameEnc: roomTitle,
+        maxUsers,
+        ttlMs,
+      }),
+    });
+
+    c.roomCode = res.code;
+    c.roomExpiresAt = Date.parse(res.expiresAt);
+    
+    const gid = res.roomId;
+    c.data.rooms[gid] = {
+      id: gid,
+      type: "group",
+      name: roomTitle,
+      members: [anonUserId],
+      ttl: ttlMs,
+      createdAt: Date.now(),
+    };
+    c.data.groups[gid] = {
+      id: gid,
+      self: anonUserId,
+      own: { k: b64e(rnd(32)), n: 0 },
+      peers: {},
+    };
+
+    c.startGuest(gid);
+    return { client: c, code: res.code, roomId: res.roomId, expiresAt: res.expiresAt };
+  }
+
+  static async joinGuestRoom(opts: { displayName: string; code: string }): Promise<{ client: KedClient; roomId: string }> {
+    const c = new KedClient();
+    c.isGuest = true;
+    const code = opts.code.trim().toLowerCase();
+    const name = opts.displayName.trim() || `Guest-${randomToken(4)}`;
+    c.username = name;
+    const anonUserId = `u_anon_${randomToken(12)}`;
+    c.userId = anonUserId;
+    c.data = emptyVault(name);
+    c.data.identity = await createIdentity();
+    c.keyBytes = rnd(32);
+    c.keySalt = b64e(rnd(16));
+
+    const res = await req<{ ok: boolean; roomId: string; error?: string }>(null, "rooms/join", {
+      method: "POST",
+      body: JSON.stringify({
+        code,
+        anonId: anonUserId,
+      }),
+    });
+
+    c.roomCode = code;
+    const gid = res.roomId;
+    c.data.rooms[gid] = {
+      id: gid,
+      type: "group",
+      name: `Room #${code.toUpperCase()}`,
+      members: [anonUserId],
+      ttl: 30 * 60_000,
+      createdAt: Date.now(),
+    };
+    c.data.groups[gid] = {
+      id: gid,
+      self: anonUserId,
+      own: { k: b64e(rnd(32)), n: 0 },
+      peers: {},
+    };
+
+    c.startGuest(gid);
+    return { client: c, roomId: res.roomId };
+  }
+
+  private startGuest(roomId: string) {
+    if (this.timer) clearInterval(this.timer);
+    this.connected = true;
+    this.timer = setInterval(() => void this.pollGuest(roomId), 1500);
+    this.burn = setInterval(() => this.burnDue(), 700);
+    void this.pollGuest(roomId);
+  }
+
+  async pollGuest(roomId: string): Promise<void> {
+    this.lastPoll = Date.now();
+    let res: { items: RelayItem[]; next: number };
+    try {
+      res = await req<typeof res>(null, `sync?anonId=${encodeURIComponent(this.userId)}&cursor=${this.data.cursor}&limit=150`);
+    } catch (e) {
+      this.error = (e as Error).message;
+      return;
+    }
+    this.error = null;
+    let touched = false;
+    for (const item of res.items) {
+      if (this.data.seen[item.id]) continue;
+      touched = true;
+      await this.handle(item);
+      this.data.seen[item.id] = 1;
+    }
+    if (res.next > this.data.cursor) this.data.cursor = res.next;
+    if (touched || res.items.length) {
+      this.notify();
+    }
   }
 
   static async register(opts: { username: string; passphrase: string; device?: string; inviteCode?: string }): Promise<KedClient> {
@@ -456,6 +583,10 @@ export class KedClient {
 
   /** Encrypt + write the local vault. Relay mirror is throttled (metadata only). */
   persistNow = async () => {
+    if (this.isGuest) {
+      this.notify();
+      return;
+    }
     if (!this.keyBytes) return;
     const blob = await this.encryptVault();
     if (this.token && Date.now() - this.lastPush > 5000) {
@@ -576,7 +707,10 @@ export class KedClient {
     const peerId = mine ? room.peerId ?? "" : item.senderId;
     let value: Record<string, unknown>;
     try {
-      if (isGroup) {
+      if (this.isGuest || (isGroup && (!this.data.groups[item.roomId] || Object.keys(this.data.groups[item.roomId].peers).length === 0))) {
+        const out = await ephemeralDecrypt(item.roomId, item.header, item.body, this.roomCode);
+        value = out.value as Record<string, unknown>;
+      } else if (isGroup) {
         const g = this.data.groups[item.roomId];
         if (!g) return;
         const out = await groupDecrypt(g, item.senderId, item.header, item.body);
@@ -816,7 +950,16 @@ export class KedClient {
     const room = this.data.rooms[roomId];
     if (!room) throw new Error("unknown room");
     let wire: { header: MsgHeader; body: B64 };
-    if (room.type === "group") {
+    if (this.isGuest || (room.type === "group" && (!this.data.groups[roomId] || Object.keys(this.data.groups[roomId].peers).length === 0))) {
+      const out = await ephemeralEncrypt(
+        this.data.identity!,
+        roomId,
+        payload,
+        (this.data.history[roomId]?.length ?? 0) + 1,
+        this.roomCode
+      );
+      wire = out.wire;
+    } else if (room.type === "group") {
       const g = this.data.groups[roomId] ?? (await createGroupState(roomId, this.userId));
       const out = await groupEncrypt(this.data.identity!, g, payload);
       this.data.groups[roomId] = out.group;
@@ -837,6 +980,7 @@ export class KedClient {
         header: JSON.stringify(wire.header),
         body: wire.body,
         ttlMs: ttlMs ?? undefined,
+        anonId: this.isGuest ? this.userId : undefined,
       }),
     });
     return { res, header: wire.header };

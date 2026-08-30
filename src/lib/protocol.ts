@@ -453,3 +453,51 @@ export async function decryptAttachment(cipherB64: string, key: AttachmentKey): 
   if (b64e(await sha256(plain)) !== key.sha) throw new Error("HASH_MISMATCH: attachment corrupted");
   return plain;
 }
+
+/* ------------------------------------------------------------------ ephemeral room crypto */
+
+export async function ephemeralRoomKey(roomId: string, code?: string): Promise<Bytes> {
+  const secret = utf8(`SHER-EPHEMERAL-SECRET:${roomId}:${code ? code.toLowerCase() : ""}`);
+  return sha256(secret);
+}
+
+export async function ephemeralEncrypt(
+  me: LocalIdentity,
+  roomId: string,
+  plaintext: unknown,
+  seq: number = 0,
+  code?: string
+): Promise<{ wire: OutMessage }> {
+  const rKey = await ephemeralRoomKey(roomId, code);
+  const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${seq}`);
+  const core: Omit<MsgHeader, "sig"> = {
+    v: PROTOCOL_VERSION,
+    t: "msg",
+    r: me.ik.pub,
+    n: seq,
+    s: me.ik.pub,
+    p: me.spk.pub,
+  };
+  const aad = utf8(JSON.stringify(core));
+  const env = await seal(msgKey, utf8(JSON.stringify(plaintext)), aad);
+  const body = `${env.n}.${env.c}`;
+  return {
+    wire: { header: { ...(core as MsgHeader), sig: await signHeader(me.ik, core, body) }, body },
+  };
+}
+
+export async function ephemeralDecrypt(
+  roomId: string,
+  header: MsgHeader,
+  body: B64,
+  code?: string
+): Promise<{ value: unknown; authenticated: boolean }> {
+  const authenticated = await verifyHeader(header, body);
+  const rKey = await ephemeralRoomKey(roomId, code);
+  const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${header.n}`);
+  const env = unpackEnvelope(body, "ephemeral message body");
+  const plain = await openAead(msgKey, env, utf8(JSON.stringify(stripSig(header))));
+  const value = JSON.parse(new TextDecoder().decode(plain));
+  return { value, authenticated };
+}
+

@@ -64,7 +64,20 @@ export default function Page() {
       (s) => alive && s && setRelay(s),
     );
     try {
-      const p = new URLSearchParams(location.search).get("invite");
+      const sp = new URLSearchParams(location.search);
+      const p = sp.get("invite");
+      const rCode = sp.get("room") || sp.get("join");
+      if (rCode) {
+        // Auto-join room from URL
+        void KedClient.joinGuestRoom({ displayName: "Guest", code: rCode }).then((res) => {
+          if (alive && res?.client) {
+            setClient(res.client);
+            setPhase("app");
+            setRoom(res.roomId);
+            toast(lang === "hi" ? "रूम में शामिल हो गए" : "Joined room via link", "good");
+          }
+        }).catch(() => undefined);
+      }
       if (p) {
         setInviteCode(p);
         try {
@@ -303,7 +316,17 @@ export default function Page() {
   if (phase === "landing")
     return (
       <>
-        <Landing relay={relay} onEnter={() => setPhase("auth")} />
+        <Landing
+          relay={relay}
+          onEnter={() => setPhase("auth")}
+          onEnterGuest={(guestClient) => {
+            setClient(guestClient);
+            setPhase("app");
+            const first = Object.values(guestClient.data.rooms)[0];
+            if (first) setRoom(first.id);
+            toast(lang === "hi" ? "अस्थायी रूम तैयार है — चैट शुरू करें" : "Ephemeral room ready — start chatting", "good");
+          }}
+        />
         <Toasts toasts={toasts} />
       </>
     );
@@ -412,6 +435,31 @@ export default function Page() {
           ) : null}
         </div>
       </header>
+
+      {client.isGuest ? (
+        <div className="mono row items-center justify-between gap-3 border-b border-[rgba(79,240,182,.3)] bg-[rgba(79,240,182,.08)] px-4 py-2 text-[11px] text-[#a9ffe2]">
+          <div className="row gap-2">
+            <Icon name="flame" size={14} className="text-[var(--acc)]" />
+            <span>
+              <b>{lang === "hi" ? "अस्थायी चैट रूम" : "Ephemeral Guest Room"}</b> · {lang === "hi" ? "ब्राउज़र बंद होने पर सभी डेटा स्वतः नष्ट होगा" : "In-memory · Auto-wipes on tab close"}
+            </span>
+          </div>
+          {client.roomCode ? (
+            <div className="row gap-2">
+              <span className="kicker !text-[#a9ffe2]">{lang === "hi" ? "रूम कोड:" : "Room Code:"}</span>
+              <button
+                className="btn btn-sm !bg-black/40 !text-[#a9ffe2]"
+                onClick={() => {
+                  void navigator.clipboard.writeText(client.roomCode || "");
+                  toast(lang === "hi" ? "रूम कोड कॉपी किया गया" : "Room code copied to clipboard", "good");
+                }}
+              >
+                <Icon name="copy" size={12} /> {client.roomCode.toUpperCase()}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {notice ? (
         <div

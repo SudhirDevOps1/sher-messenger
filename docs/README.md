@@ -67,18 +67,21 @@ flowchart LR
 | `/api/health` `/api/ked/healthz` `/api/ked/readyz` `/api/ked/version` | ops probes |
 | `/api/dev-selftest?relay=1` | 51-check conformance suite, live |
 
-### Public web, hidden admin (extreme privacy)
+### Public web, direct admin portal & dual-language support
 
-The web app is **public** — anyone can open `/` and use **free 30m ephemeral rooms without any login** (see next section). `/admin` is **never linked** from the UI and is the **only** place that requires login — it is gated by two factors:
+The web app is **public and dual-language (English / हिन्दी)** — anyone can open `/` and use **free 30m ephemeral rooms without any login**. `/admin` is **never linked** publicly from the UI and provides a streamlined 1-step login using `ADMIN_EMAIL` and `ADMIN_PASSWORD`:
 
-1. **Env gate** — `ADMIN_EMAIL` + `ADMIN_PASSWORD` (or `SHER_ADMIN_EMAIL` / `SHER_ADMIN_PASSWORD`) set as encrypted Secrets on Cloudflare / Vercel / Render. Nothing is exposed to the browser. The client must pass `POST /api/ked/admin/env-auth` (`src/app/api/ked/[...slug]/route.ts:464`) — rate-limited via `admin-env` bucket — before the bearer step appears. Without both env vars the endpoint returns `500 admin env not configured`.
-2. **Bearer gate** — a valid admin invite bearer token (`Authorization: Bearer <token>`) whose role is `admin`. All `/api/ked/admin/*` routes require it (`src/app/api/ked/[...slug]/route.ts:522`). Tokens are stored as `SHA-256` only.
+1. **Direct Admin Login** — Enter `ADMIN_EMAIL` + `ADMIN_PASSWORD` directly at `/admin`. The backend authenticates via timing-safe comparison against environment variables and issues an authentic session token immediately without requiring manual token copy/paste.
+2. **Active Rooms Monitor & Shredder** — Live tab in `/admin` allowing the operator to inspect all active ephemeral rooms, creation time, participant count, remaining TTL, and trigger instant "Terminate & Burn" destruction.
+3. **Pure Dual Language** — All interfaces provide pure, idiomatic English and Hindi (हिन्दी) translations with instant switching.
 
-UI logic: `src/app/admin/page.tsx` keeps `ked.admin.env` in `sessionStorage` (tab-only); closing the tab clears the env-unlocked flag and forces re-auth. **Regular users never need an account or login** — 30m anon rooms are completely free and anonymous. See `SECURITY.md` and `RUNBOOK.md` for operator setup.
+### Free 30m rooms — zero login required (बिना लॉगिन) · ephemeral, auto-burn
 
-### Free 30m rooms — no login (bina login ke) · ephemeral, auto-burn
-
-Anyone can create an instant group room and share a 6-char code — **no account, no handle, no passphrase, FREE without login**. Only the admin panel requires `ADMIN_EMAIL`/`ADMIN_PASSWORD` + bearer; regular users never log in.
+Anyone can create an instant group room and share a 6-character code — **no account, no handle, no passphrase, 100% FREE without login**.
+- Private keys and session keys exist purely in browser memory.
+- Closing the tab destroys all in-memory keys instantly.
+- Messages auto-shred on the relay after TTL (customizable from 5m to 60m, defaulting to 30m).
+- Anti-screenshot screen blur triggers whenever the browser window loses focus.
 
 **How `anonId` works:** the client generates `anonId = anon_<12 hex>` (e.g. `anon_a1b2c3d4e5f6`) in memory / `sessionStorage` only — never stored in `ked_users`, never persisted to `localStorage`, never tied to a handle. It is sent as `anonId` in `rooms/code`, `rooms/join`, `send`, `sync` and is used as `userId`/`senderId`/`createdBy` for that ephemeral session. Close the tab → `anonId` + local history gone. If a Bearer token is present, auth wins and `anonId` is ignored.
 
