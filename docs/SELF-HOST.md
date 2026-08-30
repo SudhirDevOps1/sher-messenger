@@ -4,9 +4,9 @@
 
 ---
 
-## 🧰 "Kya Kyu Chahiye" Service Matrix
+## 🧰 Cloud & Database Service Matrix
 
-| Service | Role in SHER-MESSENGER v2 | Kyu Chahiye? (Why needed) | Free-Tier Limit |
+| Service | Role in SHER-MESSENGER v2 | Why Needed? | Free-Tier Limit |
 | :--- | :--- | :--- | :--- |
 | **Cloudflare Pages** | Static Web Frontend & UI Shell | Fast global CDN delivery with unlimited static requests. | Unlimited requests & bandwidth |
 | **Cloudflare Workers** | Edge API Gateway & WebSocket Router | Routes WebSocket connections to rooms with low latency. | 100,000 requests/day · 10ms CPU |
