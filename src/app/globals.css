@@ -461,3 +461,76 @@ textarea.input {
   background: repeating-linear-gradient( -30deg, transparent 0 120px, rgba(255,255,255,.7) 120px 121px);
   z-index: 9999;
 }
+
+/* ------------------------------------------------------------------ DuckDuckGo-style Fire Animation */
+@keyframes fireRise {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-20%);
+    opacity: 0;
+  }
+}
+
+@keyframes flameFlicker {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 25px rgba(255, 69, 0, 0.9)) drop-shadow(0 0 50px rgba(255, 140, 0, 0.7));
+  }
+  25% {
+    transform: scale(1.1, 0.94) rotate(-3deg);
+    filter: drop-shadow(0 0 40px rgba(255, 34, 0, 1)) drop-shadow(0 0 70px rgba(255, 165, 0, 0.8));
+  }
+  50% {
+    transform: scale(0.93, 1.07) rotate(3deg);
+    filter: drop-shadow(0 0 45px rgba(255, 102, 0, 1)) drop-shadow(0 0 85px rgba(255, 221, 0, 0.9));
+  }
+  75% {
+    transform: scale(1.06, 0.97) rotate(-2deg);
+    filter: drop-shadow(0 0 35px rgba(255, 51, 0, 0.9)) drop-shadow(0 0 65px rgba(255, 153, 0, 0.75));
+  }
+}
+
+@keyframes emberFly {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-220px) translateX(var(--drift, 25px)) scale(0.1);
+    opacity: 0;
+  }
+}
+
+.fire-incinerate {
+  animation: ashIncinerate 1.6s ease-in-out forwards;
+}
+
+@keyframes ashIncinerate {
+  0% {
+    opacity: 1;
+    filter: brightness(1) contrast(1);
+  }
+  30% {
+    filter: brightness(2.5) contrast(1.5) sepia(1) saturate(5) hue-rotate(-25deg);
+    box-shadow: 0 0 40px rgba(255, 80, 0, 0.8);
+  }
+  70% {
+    filter: brightness(0.2) blur(3px);
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92) translateY(15px);
+  }
+}

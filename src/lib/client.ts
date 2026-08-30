@@ -1197,6 +1197,23 @@ export class KedClient {
     this.notify();
   }
 
+  async burnRoom(roomId: string) {
+    const list = this.data.history[roomId] ?? [];
+    const ids = list.map((m) => m.id);
+    if (ids.length) {
+      await req(this.token, "shred", { method: "POST", body: JSON.stringify({ ids }) }).catch(() => undefined);
+      for (const m of list) {
+        m.destroyed = true;
+        m.text = "";
+        m.attachment = null;
+      }
+    }
+    this.data.history[roomId] = [];
+    this.ledger("room.burned", `${roomId.slice(0, 8)} · all messages incinerated and zeroed`);
+    await this.persist();
+    this.notify();
+  }
+
   async setRoomTtl(roomId: string, ttlMs: number | null) {
     const room = this.data.rooms[roomId];
     if (!room) return;

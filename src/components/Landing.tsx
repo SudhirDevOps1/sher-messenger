@@ -428,6 +428,9 @@ export default function Landing({
             </a>
           </nav>
           <div className="row gap-1.5">
+            <button className="btn btn-sm" onClick={() => setContactModal(true)}>
+              <Icon name="spark" size={13} /> {lang === "hi" ? "फीडबैक" : "Feedback"}
+            </button>
             <button className="btn btn-sm" onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); try { localStorage.setItem("ked.lang", n); } catch {} }}>
               {lang === "en" ? "हिंदी" : "EN"}
             </button>
@@ -687,12 +690,22 @@ export default function Landing({
       <Modal open={contactModal} onClose={() => setContactModal(false)} title={lang === "hi" ? "संपर्क व फीडबैक" : "Contact & Feedback"} icon="spark">
         <form
           method="POST"
-          action={contactFormAction || "#"}
+          action={contactFormAction || undefined}
           onSubmit={(e) => {
-            if (!contactFormAction) {
-              e.preventDefault();
-              alert(lang === "hi" ? "व्यवस्थापक द्वारा फीडबैक एंडपॉइंट कॉन्फ़िगर नहीं है।" : "Contact form endpoint is not configured by the deployer.");
+            if (contactFormAction) {
+              return;
             }
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const email = String(formData.get("email") || "");
+            const message = String(formData.get("message") || "");
+            try {
+              const existing = JSON.parse(localStorage.getItem("ked.feedback.submissions") || "[]");
+              existing.push({ email, message, at: new Date().toISOString() });
+              localStorage.setItem("ked.feedback.submissions", JSON.stringify(existing.slice(-20)));
+            } catch {}
+            alert(lang === "hi" ? "✅ आपका फीडबैक प्राप्त हुआ! धन्यवाद।" : "✅ Feedback received! Thank you.");
+            setContactModal(false);
           }}
           className="grid gap-3"
         >

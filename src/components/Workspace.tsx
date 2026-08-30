@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type HistMsg, type Room, countdown, fmtBytes, fmtTime } from "@/lib/client";
 import type { KedClient } from "@/lib/client";
-import { Chip, Copyable, EmojiPicker, Icon, Identicon, TtlRing, useNow } from "./ui";
+import { Chip, Copyable, EmojiPicker, FireOverlay, Icon, Identicon, TtlRing, useNow } from "./ui";
 
 /* ------------------------------------------------------------------ shared */
 
@@ -535,6 +535,8 @@ export function Chat({
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [emoji, setEmoji] = useState(false);
+  const [burning, setBurning] = useState(false);
+  const [burnText, setBurnText] = useState("Burning & Shredding Room...");
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -545,6 +547,27 @@ export function Chat({
   const peer = room?.type === "dm" ? client.data.contacts[room.peerId ?? ""] : null;
   const typing = roomId ? (client.typingPeers[roomId] ?? 0) > now - 4500 : false;
   const lastInbound = list.filter((m) => !m.me).reduce((acc, m) => Math.max(acc, m.at), 0) || null;
+
+  const handleBurnRoom = async () => {
+    if (!roomId || burning) return;
+    setBurning(true);
+    setBurnText("Incinerating & Shredding History...");
+    try {
+      await client.burnRoom(roomId);
+    } catch {}
+    setTimeout(() => {
+      setBurning(false);
+    }, 1700);
+  };
+
+  // Auto-burn when room duration or TTL expires
+  useEffect(() => {
+    if (!roomId) return;
+    if (client.roomExpiresAt && now >= client.roomExpiresAt) {
+      void handleBurnRoom();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, roomId, client.roomExpiresAt]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -687,6 +710,13 @@ export function Chat({
         </div>
         <div className="row gap-1.5">
           <button
+            className="btn btn-sm !border-[rgba(255,100,50,.5)] !bg-[rgba(255,80,0,.14)] !text-[#ff9d5c] hover:!bg-[rgba(255,80,0,.28)] shadow-[0_0_15px_rgba(255,100,0,.25)]"
+            title="DuckDuckGo-style Fire Button: Burn & Shred Room History"
+            onClick={handleBurnRoom}
+          >
+            <Icon name="flame" size={13} /> Fire Burn
+          </button>
+          <button
             className="btn btn-sm"
             title="Cycle auto-burn for this room"
             onClick={() => {
@@ -703,7 +733,9 @@ export function Chat({
         </div>
       </header>
 
-      <div ref={listRef} className={`scroll min-h-0 flex-1 px-4 py-3 ${blur ? "secret" : ""}`}>
+      <FireOverlay active={burning} text={burnText} />
+
+      <div ref={listRef} className={`scroll min-h-0 flex-1 px-4 py-3 ${blur ? "secret" : ""} ${burning ? "fire-incinerate" : ""}`}>
         {list.length === 0 ? (
           <div className="mono mx-auto mt-16 max-w-[60ch] rounded-xl border border-dashed border-[var(--line-strong)] p-5 text-[11.5px] leading-relaxed text-[var(--ink-dim)]">
             Empty room. Your first message carries an X3DH prekey bundle in its header, so the peer can build the matching session even

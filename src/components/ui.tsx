@@ -442,3 +442,47 @@ export function useNow(intervalMs = 1000) {
   }, [intervalMs]);
   return now;
 }
+
+export function FireOverlay({ active, text = "Burning & Shredding Room..." }: { active: boolean; text?: string }) {
+  if (!active) return null;
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[100] flex flex-col items-center justify-end overflow-hidden">
+      {/* Dark reddish combustion haze */}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#ff1a00]/50 via-[#ff5500]/25 to-transparent animate-pulse" />
+
+      {/* Central Flame Glow & Badge */}
+      <div className="relative z-20 mb-36 flex flex-col items-center gap-3">
+        <div className="relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-t from-[#ff0000] via-[#ff5500] to-[#ffcc00] shadow-[0_0_90px_rgba(255,60,0,1)] animate-[flameFlicker_0.5s_infinite]">
+          <span className="text-5xl">🔥</span>
+        </div>
+        <div className="mono rounded-full border border-[rgba(255,180,50,.6)] bg-black/85 px-6 py-2 text-sm font-bold tracking-wider text-[#ffe380] shadow-[0_0_35px_rgba(255,90,0,0.9)] backdrop-blur-md">
+          {text}
+        </div>
+      </div>
+
+      {/* Rising Fire Wall at bottom */}
+      <div className="relative z-10 w-full h-[55vh] flex items-end justify-center animate-[fireRise_1.6s_ease-out_forwards]">
+        <div className="w-full h-full bg-gradient-to-t from-[#ff1a00] via-[#ff6600]/80 to-transparent blur-md opacity-95" />
+      </div>
+
+      {/* Floating Sparks & Embers */}
+      <div className="absolute inset-x-0 bottom-0 h-80 pointer-events-none">
+        {[...Array(28)].map((_, i) => (
+          <span
+            key={i}
+            className="absolute bottom-0 rounded-full bg-[#ffea78] shadow-[0_0_12px_#ff7700]"
+            style={{
+              left: `${(i * 3.6 + (i % 3) * 2)}%`,
+              width: `${Math.max(3, (i % 5) * 2 + 2)}px`,
+              height: `${Math.max(3, (i % 5) * 2 + 2)}px`,
+              animation: `emberFly ${0.9 + (i % 6) * 0.2}s infinite ease-out`,
+              animationDelay: `${(i % 5) * 0.12}s`,
+              ["--drift" as any]: `${(i % 2 === 0 ? 1 : -1) * (18 + (i % 4) * 12)}px`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+

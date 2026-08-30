@@ -51,6 +51,11 @@ export default function Page() {
   });
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [feedbackModal, setFeedbackModal] = useState(false);
+  const [feedbackEmail, setFeedbackEmail] = useState("");
+  const [feedbackMsg, setFeedbackMsg] = useState("");
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  const contactFormAction = process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || "";
   const [themeAccent, setThemeAccent] = useState<"emerald" | "blue" | "purple" | "amber" | "rose">(() => {
     try {
       return (localStorage.getItem("ked.accent") as "emerald" | "blue" | "purple" | "amber" | "rose") || "emerald";
@@ -72,46 +77,46 @@ export default function Page() {
     void safeJson<{ adapter?: string; users?: number; ciphertextRows?: number }>("/api/ked/stats").then(
       (s) => alive && s && setRelay(s),
     );
-    try {
-      const sp = new URLSearchParams(location.search);
-      const p = sp.get("invite");
-      const roomParam = sp.get("room") || sp.get("join");
-      const hashKey = location.hash.includes("k=") ? location.hash.replace("#k=", "") : "";
 
-      if (roomParam) {
-        void KedClient.joinGuestRoom({
-          displayName: "Guest",
-          code: roomParam.toLowerCase(),
-          key: hashKey,
-        }).then((res) => {
-          if (alive && res?.client) {
-            setClient(res.client);
-            setPhase("app");
-            setRoom(res.roomId);
-            toast(lang === "hi" ? "रूम में शामिल हो गए" : "Joined room via link", "good");
+    const init = async () => {
+      try {
+        const sp = new URLSearchParams(location.search);
+        const p = sp.get("invite");
+        const roomParam = sp.get("room") || sp.get("join");
+        const hashKey = location.hash.includes("k=") ? location.hash.replace("#k=", "") : "";
+
+        if (p) {
+          setInviteCode(p);
+          try {
+            sessionStorage.setItem("ked.invite", p);
+          } catch {
+            /* ignore */
           }
-        }).catch(() => {});
-      }
-
-      if (p) {
-        setInviteCode(p);
-        try {
-          sessionStorage.setItem("ked.invite", p);
-        } catch {
-          /* ignore */
+        } else {
+          const saved = sessionStorage.getItem("ked.invite");
+          if (saved) setInviteCode(saved);
         }
-      } else {
-        const saved = sessionStorage.getItem("ked.invite");
-        if (saved) setInviteCode(saved);
-      }
-    } catch {
-      /* ignore */
-    }
-    void safeJson<{ notice: { body: string; level: string } | null }>("/api/ked/notice").then((n) => alive && setNotice(n?.notice ?? null));
-    if ("serviceWorker" in navigator)
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
-    void KedClient.quick()
-      .then((c) => {
+
+        if (roomParam) {
+          try {
+            const res = await KedClient.joinGuestRoom({
+              displayName: "Guest",
+              code: roomParam.toLowerCase(),
+              key: hashKey,
+            });
+            if (alive && res?.client) {
+              setClient(res.client);
+              setPhase("app");
+              setRoom(res.roomId);
+              toast(lang === "hi" ? "रूम में शामिल हो गए" : "Joined room via link", "good");
+              return;
+            }
+          } catch (e) {
+            toast((e as Error).message || "Failed to join room", "bad");
+          }
+        }
+
+        const c = await KedClient.quick().catch(() => null);
         if (!alive) return;
         if (c) {
           setClient(c);
@@ -119,17 +124,19 @@ export default function Page() {
           const first = Object.values(c.data.rooms)[0];
           if (first) setRoom(first.id);
         } else {
-          const hasInvite = (() => {
-            try {
-              return !!(new URLSearchParams(location.search).get("invite") || sessionStorage.getItem("ked.invite"));
-            } catch {
-              return false;
-            }
-          })();
+          const hasInvite = !!(p || sessionStorage.getItem("ked.invite"));
           setPhase(hasInvite ? "auth" : "landing");
         }
-      })
-      .catch(() => alive && setPhase("landing"));
+      } catch {
+        if (alive) setPhase("landing");
+      }
+    };
+
+    void init();
+    void safeJson<{ notice: { body: string; level: string } | null }>("/api/ked/notice").then((n) => alive && setNotice(n?.notice ?? null));
+    if ("serviceWorker" in navigator)
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+
     return () => {
       alive = false;
     };
@@ -477,6 +484,9 @@ export default function Page() {
           <button className="btn btn-sm" onClick={() => setInspector((v) => !v)} title="Toggle inspector (⌘B)">
             <Icon name="key" size={13} /> <span className="hidden sm:inline">Inspector</span>
           </button>
+          <button className="btn btn-sm" onClick={() => { setFeedbackSent(false); setFeedbackModal(true); }} title="Send feedback / Bug report">
+            <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "फीडबैक" : "Feedback"}</span>
+          </button>
           <a className="btn btn-sm" href="/guide" title="Kaise kaam karta hai + deploy guide">
             <Icon name="spark" size={13} /> <span className="hidden sm:inline">Guide</span>
           </a>
@@ -787,6 +797,86 @@ export default function Page() {
             </a>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={feedbackModal} onClose={() => setFeedbackModal(false)} title={lang === "hi" ? "संपर्क व फीडबैक" : "Contact & Feedback"} icon="spark">
+        {feedbackSent ? (
+          <div className="grid gap-3 py-4 text-center">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[rgba(79,240,182,.15)] text-[var(--acc)]">
+              <Icon name="check" size={24} />
+            </div>
+            <h4 className="text-sm font-bold text-[#a9ffe2]">
+              {lang === "hi" ? "फीडबैक प्राप्त हुआ!" : "Feedback Received!"}
+            </h4>
+            <p className="mono text-xs text-[var(--ink-dim)]">
+              {lang === "hi"
+                ? "आपके सुझाव के लिए धन्यवाद। हम SHER Messenger को बेहतर बनाने में लगे हैं।"
+                : "Thank you for your feedback. We appreciate your suggestions."}
+            </p>
+            <button className="btn btn-primary justify-center mt-2" onClick={() => setFeedbackModal(false)}>
+              {lang === "hi" ? "बंद करें" : "Close"}
+            </button>
+          </div>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              if (contactFormAction) {
+                // Let native POST form submission proceed
+                return;
+              }
+              e.preventDefault();
+              try {
+                const existing = JSON.parse(localStorage.getItem("ked.feedback.submissions") || "[]");
+                existing.push({ email: feedbackEmail, message: feedbackMsg, at: new Date().toISOString() });
+                localStorage.setItem("ked.feedback.submissions", JSON.stringify(existing.slice(-20)));
+              } catch {}
+              setFeedbackSent(true);
+              toast(lang === "hi" ? "फीडबैक दर्ज किया गया" : "Feedback recorded locally", "good");
+            }}
+            action={contactFormAction || undefined}
+            method="POST"
+            className="grid gap-3"
+          >
+            <p className="text-[12.5px] leading-relaxed text-[var(--ink-dim)]">
+              {lang === "hi"
+                ? "सुझाव, बग रिपोर्ट या सहायता के लिए नीचे संदेश लिखें:"
+                : "Send feedback, feature requests, or bug reports directly:"}
+            </p>
+            <div>
+              <label className="kicker mb-1 block">{lang === "hi" ? "आपका ईमेल" : "Your Email"}</label>
+              <input
+                name="email"
+                type="email"
+                required
+                value={feedbackEmail}
+                onChange={(e) => setFeedbackEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="kicker mb-1 block">{lang === "hi" ? "संदेश" : "Message"}</label>
+              <textarea
+                name="message"
+                required
+                value={feedbackMsg}
+                onChange={(e) => setFeedbackMsg(e.target.value)}
+                placeholder={lang === "hi" ? "अपना संदेश यहाँ लिखें..." : "Type your message or feedback here..."}
+                className="input min-h-[100px]"
+              />
+            </div>
+            {/* Honeypot */}
+            <input name="website" tabIndex={-1} autoComplete="off" style={{ display: "none" }} />
+            <div className="row justify-end gap-2 mt-2">
+              <button type="button" className="btn" onClick={() => setFeedbackModal(false)}>
+                {lang === "hi" ? "रद्द करें" : "Cancel"}
+              </button>
+              <button type="submit" className="btn btn-primary">
+                {lang === "hi" ? "भेजें" : "Send Feedback"}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <Toasts toasts={toasts} />
