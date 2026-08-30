@@ -63,6 +63,11 @@ export default function Admin() {
   const [inviteUses, setInviteUses] = useState(1);
   const [inviteDays, setInviteDays] = useState(7);
   const [confirmPurge, setConfirmPurge] = useState<AdminUser | null>(null);
+  const [envOk, setEnvOk] = useState(false);
+  const [envEmail, setEnvEmail] = useState("");
+  const [envPass, setEnvPass] = useState("");
+  const [envErr, setEnvErr] = useState<string | null>(null);
+  const [envBusy, setEnvBusy] = useState(false);
 
   const call = useCallback(
     async <T,>(path: string, init?: RequestInit): Promise<T | null> => {
@@ -105,6 +110,8 @@ export default function Admin() {
     try {
       const saved = localStorage.getItem("ked.admin.token");
       if (saved) setToken(saved);
+      const eok = sessionStorage.getItem("ked.admin.env");
+      if (eok === "1") setEnvOk(true);
     } catch {
       /* ignore */
     }
@@ -144,6 +151,54 @@ export default function Admin() {
     }
   };
 
+  if (!envOk)
+    return (
+      <div className="shell scroll">
+        <div className="mx-auto grid min-h-[100dvh] max-w-[460px] place-content-center gap-4 px-5">
+          <div className="panel relative p-6">
+            <span className="glowline" />
+            <div className="row gap-2.5 text-[var(--acc)]">
+              <Icon name="shield" size={18} />
+              <span className="text-[15px] font-bold text-[var(--ink)]">Admin console — env gate</span>
+            </div>
+            <p className="mono mt-2.5 text-[11px] leading-relaxed text-[var(--ink-dim)]">
+              Web public hai — ye panel sirf env <code>ADMIN_EMAIL</code> + <code>ADMIN_PASSWORD</code> se khulta hai. Same dalne par hi bearer step ayega. Web khula rahega, admin chhupa rahega.
+            </p>
+            <input className="input mono mt-4" placeholder="ADMIN_EMAIL" value={envEmail} onChange={(e) => setEnvEmail(e.target.value.trim())} />
+            <input className="input mono mt-2" type="password" placeholder="ADMIN_PASSWORD" value={envPass} onChange={(e) => setEnvPass(e.target.value)} />
+            {envErr ? <div className="mono mt-2.5 text-[11px] leading-relaxed text-[#ffc2c9]">{envErr}</div> : null}
+            <div className="row mt-4 gap-2">
+              <a className="btn flex-1 justify-center" href="/">
+                <Icon name="chevron" size={13} className="rotate-180" /> App
+              </a>
+              <button
+                className="btn btn-primary flex-1 justify-center"
+                disabled={envBusy || !envEmail || !envPass}
+                onClick={async () => {
+                  setEnvBusy(true);
+                  setEnvErr(null);
+                  const r = await safeJson<{ ok?: boolean; error?: string }>("/api/ked/admin/env-auth", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ email: envEmail, pass: envPass }),
+                  });
+                  setEnvBusy(false);
+                  if (r?.ok) {
+                    try {
+                      sessionStorage.setItem("ked.admin.env", "1");
+                    } catch {}
+                    setEnvOk(true);
+                  } else setEnvErr((r as { error?: string })?.error ?? "env auth failed");
+                }}
+              >
+                {envBusy ? "checking…" : "Unlock admin"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+
   if (!token || !me)
     return (
       <div className="shell scroll">
@@ -155,8 +210,8 @@ export default function Admin() {
               <span className="text-[15px] font-bold text-[var(--ink)]">Admin console</span>
             </div>
             <p className="mono mt-2.5 text-[11px] leading-relaxed text-[var(--ink-dim)]">
-              Ye route publicly linked nahi hai. Kisi <b>admin invite</b> se banayi gayi identity ka bearer token chahiye. Token sirf isi
-              browser ke localStorage mein rehta hai aur relay par plaintext store nahi hota (sirf SHA-256 hash).
+              Env ok — ab Kisi <b>admin invite</b> se banayi gayi identity ka bearer token chahiye. Token sirf isi browser ke
+              localStorage mein rehta hai aur relay par plaintext store nahi hota (sirf SHA-256 hash).
             </p>
             <input className="input mono mt-4" placeholder="bearer token" value={token} onChange={(e) => setToken(e.target.value.trim())} />
             {err ? <div className="mono mt-2.5 text-[11px] leading-relaxed text-[#ffc2c9]">{err}</div> : null}

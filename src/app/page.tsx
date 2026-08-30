@@ -152,6 +152,50 @@ export default function Page() {
     return () => window.removeEventListener("keydown", onKey);
   }, [client]);
 
+  // privacy: auto-delete ephemeral rooms on tab close + screenshot friction
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      try {
+        // mark code-rooms for 30m burn; actual shred is server TTL + local history wipe
+        if (client) {
+          const now = Date.now();
+          for (const r of Object.values(client.data.rooms)) {
+            if (r.type === "group" && (r.ttl ?? 0) <= 30 * 60_000 && (r.ttl ?? 0) > 0) {
+              // flag for next open to purge
+              client.data.history[r.id] = [];
+            }
+            void now;
+          }
+        }
+        // best-effort: clear tab-local resume key so next open requires passphrase
+        sessionStorage.clear();
+      } catch {}
+    };
+    const onCopy = (e: ClipboardEvent) => {
+      // allow copy inside inputs, block elsewhere for screenshot friction
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      e.preventDefault();
+    };
+    const onContext = (e: MouseEvent) => e.preventDefault();
+    const onPrint = (e: KeyboardEvent) => {
+      if (e.key === "PrintScreen" || (e.ctrlKey && e.key.toLowerCase() === "p") || (e.metaKey && e.shiftKey && e.key === "S")) {
+        e.preventDefault();
+        toast("screenshot blocked — privacy first", "bad");
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("copy", onCopy as unknown as EventListener);
+    document.addEventListener("contextmenu", onContext as unknown as EventListener);
+    window.addEventListener("keydown", onPrint as unknown as EventListener);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("copy", onCopy as unknown as EventListener);
+      document.removeEventListener("contextmenu", onContext as unknown as EventListener);
+      window.removeEventListener("keydown", onPrint as unknown as EventListener);
+    };
+  }, [client, toast]);
+
   /* ---------------- auth */
 
   const openRoom = useCallback((id: string) => {

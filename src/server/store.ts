@@ -96,6 +96,18 @@ export interface RoomRow {
   members: string[];
 }
 
+export interface RoomCodeRow {
+  id: string;
+  codeHash: string;
+  roomId: string;
+  createdBy: string;
+  maxUsers: number;
+  uses: number;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
 export interface Store {
   readonly adapter: string;
   init(): Promise<void>;
@@ -137,6 +149,14 @@ export interface Store {
   findInviteByCodeHash(codeHash: string): Promise<InviteRow | null>;
   consumeInvite(codeHash: string, userId: string): Promise<InviteRow | null>;
   revokeInvite(id: string): Promise<void>;
+
+  /* ---- room codes (ephemeral) ---- */
+  createRoomCode(r: RoomCodeRow): Promise<void>;
+  findRoomCodeByHash(codeHash: string): Promise<RoomCodeRow | null>;
+  consumeRoomCode(codeHash: string, userId: string): Promise<{ ok: boolean; reason?: string; roomId?: string }>;
+  listRoomCodes(roomId: string): Promise<RoomCodeRow[]>;
+  revokeRoomCode(id: string): Promise<void>;
+  deleteRoom(roomId: string): Promise<void>;
 
   listUsers(limit: number): Promise<(UserRow & { sessions: number })[]>;
   setUserRole(id: string, role: string): Promise<void>;
@@ -196,6 +216,12 @@ CREATE TABLE IF NOT EXISTS ked_notices (
 CREATE TABLE IF NOT EXISTS ked_devices (
   id text PRIMARY KEY, user_id text NOT NULL, label text, created_at text NOT NULL, last_seen text, revoked_at text);
 CREATE INDEX IF NOT EXISTS ked_devices_user_idx ON ked_devices (user_id);
+CREATE TABLE IF NOT EXISTS ked_room_codes (
+  id text PRIMARY KEY, code_hash text UNIQUE NOT NULL, room_id text NOT NULL, created_by text NOT NULL,
+  max_users integer NOT NULL DEFAULT 5, uses integer NOT NULL DEFAULT 1, created_at text NOT NULL,
+  expires_at text, revoked_at text);
+CREATE INDEX IF NOT EXISTS ked_room_codes_hash_idx ON ked_room_codes (code_hash);
+CREATE INDEX IF NOT EXISTS ked_room_codes_room_idx ON ked_room_codes (room_id);
 ALTER TABLE ked_users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'member';
 ALTER TABLE ked_users ADD COLUMN IF NOT EXISTS blocked integer NOT NULL DEFAULT 0;
 ALTER TABLE ked_users ADD COLUMN IF NOT EXISTS note text;
@@ -238,6 +264,12 @@ CREATE TABLE IF NOT EXISTS ked_notices (
 CREATE TABLE IF NOT EXISTS ked_devices (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL, label TEXT, created_at TEXT NOT NULL, last_seen TEXT, revoked_at TEXT);
 CREATE INDEX IF NOT EXISTS ked_devices_user_idx ON ked_devices (user_id);
+CREATE TABLE IF NOT EXISTS ked_room_codes (
+  id TEXT PRIMARY KEY, code_hash TEXT UNIQUE NOT NULL, room_id TEXT NOT NULL, created_by TEXT NOT NULL,
+  max_users INTEGER NOT NULL DEFAULT 5, uses INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL,
+  expires_at TEXT, revoked_at TEXT);
+CREATE INDEX IF NOT EXISTS ked_room_codes_hash_idx ON ked_room_codes (code_hash);
+CREATE INDEX IF NOT EXISTS ked_room_codes_room_idx ON ked_room_codes (room_id);
 `;
 
 /** Executor contract so one query set can serve pg, libSQL/HTTP and node:sqlite. */
@@ -700,6 +732,57 @@ export class SqlStore implements Store {
     await this.run(`UPDATE ked_invites SET revoked_at=$2 WHERE id=$1`, [id, new Date().toISOString()]);
   }
 
+  /* ---- room codes ---- */
+  private mapRoomCode(r: Row): RoomCodeRow {
+    return {
+      id: String(r.id),
+      codeHash: String(r.code_hash),
+      roomId: String(r.room_id),
+      createdBy: String(r.created_by),
+      maxUsers: Number(r.max_users ?? 5),
+      uses: Number(r.uses ?? 0),
+      createdAt: String(r.created_at),
+      expiresAt: (r.expires_at as string) ?? null,
+      revokedAt: (r.revoked_at as string) ?? null,
+    };
+  }
+  async createRoomCode(r: RoomCodeRow): Promise<void> {
+    await this.run(
+      `INSERT INTO ked_room_codes (id, code_hash, room_id, created_by, max_users, uses, created_at, expires_at, revoked_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [r.id, r.codeHash, r.roomId, r.createdBy, r.maxUsers, r.uses, r.createdAt, r.expiresAt, r.revokedAt],
+    );
+  }
+  async findRoomCodeByHash(codeHash: string): Promise<RoomCodeRow | null> {
+    const rows = await this.run(`SELECT id, code_hash, room_id, created_by, max_users, uses, created_at, expires_at, revoked_at FROM ked_room_codes WHERE code_hash=$1`, [codeHash]);
+    return rows.length ? this.mapRoomCode(rows[0]) : null;
+  }
+  async consumeRoomCode(codeHash: string, userId: string): Promise<{ ok: boolean; reason?: string; roomId?: string }> {
+    const rc = await this.findRoomCodeByHash(codeHash);
+    if (!rc) return { ok: false, reason: "unknown code" };
+    if (rc.revokedAt) return { ok: false, reason: "revoked" };
+    if (rc.expiresAt && new Date(rc.expiresAt).getTime() < Date.now()) return { ok: false, reason: "expired" };
+    if (rc.uses >= rc.maxUsers) return { ok: false, reason: "full" };
+    if (await this.isMember(rc.roomId, userId)) return { ok: true, roomId: rc.roomId };
+    const members = await this.roomMembers(rc.roomId);
+    if (members.length >= rc.maxUsers) return { ok: false, reason: "full" };
+    await this.run(`UPDATE ked_room_codes SET uses=$2 WHERE id=$1`, [rc.id, rc.uses + 1]);
+    await this.joinRoom(rc.roomId, userId, null);
+    return { ok: true, roomId: rc.roomId };
+  }
+  async listRoomCodes(roomId: string): Promise<RoomCodeRow[]> {
+    const rows = await this.run(`SELECT id, code_hash, room_id, created_by, max_users, uses, created_at, expires_at, revoked_at FROM ked_room_codes WHERE room_id=$1 ORDER BY created_at DESC`, [roomId]);
+    return rows.map((r) => this.mapRoomCode(r));
+  }
+  async revokeRoomCode(id: string): Promise<void> {
+    await this.run(`UPDATE ked_room_codes SET revoked_at=$2 WHERE id=$1`, [id, new Date().toISOString()]);
+  }
+  async deleteRoom(roomId: string): Promise<void> {
+    await this.run(`UPDATE ked_messages SET body=NULL, destroyed_at=$2 WHERE room_id=$1`, [roomId, new Date().toISOString()]);
+    await this.run(`DELETE FROM ked_room_members WHERE room_id=$1`, [roomId]);
+    await this.run(`DELETE FROM ked_rooms WHERE id=$1`, [roomId]);
+    await this.run(`UPDATE ked_room_codes SET revoked_at=$2 WHERE room_id=$1`, [roomId, new Date().toISOString()]);
+  }
+
   async listUsers(limit: number): Promise<(UserRow & { sessions: number })[]> {
     const rows = await this.run(
       `SELECT ${this.USER_COLS},
@@ -983,6 +1066,40 @@ class MemoryStore implements Store {
   async revokeInvite(id: string) {
     const i = this.invitesMem.get(id);
     if (i) this.invitesMem.set(id, { ...i, revokedAt: new Date().toISOString() });
+  }
+  private roomCodesMem = new Map<string, RoomCodeRow>();
+  async createRoomCode(r: RoomCodeRow) {
+    this.roomCodesMem.set(r.id, { ...r });
+  }
+  async findRoomCodeByHash(codeHash: string) {
+    return [...this.roomCodesMem.values()].find((x) => x.codeHash === codeHash) ?? null;
+  }
+  async consumeRoomCode(codeHash: string, userId: string) {
+    const rc = await this.findRoomCodeByHash(codeHash);
+    if (!rc) return { ok: false, reason: "unknown code" };
+    if (rc.revokedAt) return { ok: false, reason: "revoked" };
+    if (rc.expiresAt && new Date(rc.expiresAt).getTime() < Date.now()) return { ok: false, reason: "expired" };
+    if (rc.uses >= rc.maxUsers) return { ok: false, reason: "full" };
+    if (await this.isMember(rc.roomId, userId)) return { ok: true, roomId: rc.roomId };
+    const members = await this.roomMembers(rc.roomId);
+    if (members.length >= rc.maxUsers) return { ok: false, reason: "full" };
+    const next = { ...rc, uses: rc.uses + 1 };
+    this.roomCodesMem.set(rc.id, next);
+    await this.joinRoom(rc.roomId, userId, null);
+    return { ok: true, roomId: rc.roomId };
+  }
+  async listRoomCodes(roomId: string) {
+    return [...this.roomCodesMem.values()].filter((x) => x.roomId === roomId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  async revokeRoomCode(id: string) {
+    const r = this.roomCodesMem.get(id);
+    if (r) this.roomCodesMem.set(id, { ...r, revokedAt: new Date().toISOString() });
+  }
+  async deleteRoom(roomId: string) {
+    this.msgs = this.msgs.map((m) => (m.roomId === roomId ? { ...m, body: null, destroyedAt: new Date().toISOString() } : m));
+    this.membership.delete(roomId);
+    this.rooms.delete(roomId);
+    for (const [k, v] of [...this.roomCodesMem.entries()]) if (v.roomId === roomId) this.roomCodesMem.set(k, { ...v, revokedAt: new Date().toISOString() });
   }
   async listUsers(limit: number) {
     return [...this.users.values()]

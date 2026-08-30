@@ -275,6 +275,47 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     return json({ ok: true, room: { id, type, members } });
   }
 
+  if (path === "rooms/code") {
+    const me = await auth(req);
+    if (!me) return err("unauthorised", 401);
+    const rl = await bucket("rooms", req, me.user.id);
+    if (!rl.ok) return err(`rate limited: retry in ${Math.ceil(rl.retryAfterMs / 1000)}s`, 429);
+    const b = await payload(req);
+    const maxUsers = typeof b.maxUsers === "number" ? Math.max(2, Math.min(30, Math.trunc(b.maxUsers))) : 5;
+    const ttlMs = typeof b.ttlMs === "number" ? Math.max(60_000, Math.min(30 * 60_000, Math.trunc(b.ttlMs))) : 30 * 60_000;
+    const nameEnc = str(b.nameEnc, 16_000) || null;
+    const id = `r_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+    await store.ensureRoom({ id, type: "group", createdBy: me.user.id, nameEnc, defaultTtl: ttlMs });
+    await store.joinRoom(id, me.user.id, null);
+    const raw = randomUUID().replace(/-/g, "").slice(0, 6).toLowerCase();
+    const codeHash = sha(raw);
+    await store.createRoomCode({
+      id: `rc_${randomUUID().replace(/-/g, "").slice(0, 12)}`,
+      codeHash,
+      roomId: id,
+      createdBy: me.user.id,
+      maxUsers,
+      uses: 1,
+      createdAt: nowIso(),
+      expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+      revokedAt: null,
+    });
+    await store.audit(me.user.id, "room.code", `${id.slice(0, 10)} code ${raw} maxUsers=${maxUsers} ttl=${Math.round(ttlMs / 60000)}m`, nowIso());
+    return json({ ok: true, roomId: id, code: raw, maxUsers, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
+  }
+
+  if (path === "rooms/join") {
+    const me = await auth(req);
+    if (!me) return err("unauthorised", 401);
+    const b = await payload(req);
+    const code = str(b.code, 20).trim().toLowerCase();
+    if (!code) return err("room code required", 422);
+    const res = await store.consumeRoomCode(sha(code), me.user.id);
+    if (!res.ok) return err(`join failed: ${res.reason}`, 403);
+    await store.audit(me.user.id, "room.joined", `${res.roomId!.slice(0, 10)} via code`, nowIso());
+    return json({ ok: true, roomId: res.roomId });
+  }
+
   if (path === "send") {
     const me = await auth(req);
     if (!me) return err("unauthorised", 401);
@@ -458,6 +499,22 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     });
     await store.audit(null, "bootstrap.invite", "minted on an empty relay (role=admin, 1h expiry)", nowIso());
     return json({ ok: true, code: raw, role: "admin", maxUses: 3, expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+  }
+
+  /* ------------------------------------------------------------ admin env gate (public, rate-limited, no bearer) */
+  if (path === "admin/env-auth") {
+    const b = await payload(req);
+    const rl = await bucket("admin-env", req, "anon");
+    if (!rl.ok) return err(`rate limited: retry in ${Math.ceil(rl.retryAfterMs / 1000)}s`, 429);
+    const email = str(b.email, 320).trim().toLowerCase();
+    const pass = str(b.pass, 320);
+    const expEmail = (process.env.ADMIN_EMAIL ?? process.env.SHER_ADMIN_EMAIL ?? "").trim().toLowerCase();
+    const expPass = process.env.ADMIN_PASSWORD ?? process.env.SHER_ADMIN_PASSWORD ?? process.env.ADMIN_PASS ?? process.env.SHER_ADMIN_PASS ?? "";
+    if (!expEmail || !expPass) return err("admin env not configured — set ADMIN_EMAIL and ADMIN_PASSWORD on the relay", 500);
+    const okEmail = email.length === expEmail.length && timingSafe(email, expEmail);
+    const okPass = pass.length === expPass.length && timingSafe(pass, expPass);
+    if (!okEmail || !okPass) return err("invalid admin credentials", 403);
+    return json({ ok: true });
   }
 
   /* ------------------------------------------------------------ ADMIN (role-gated) */

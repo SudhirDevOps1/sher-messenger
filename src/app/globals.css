@@ -443,3 +443,21 @@ textarea.input {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ------------------------------------------------------------------ privacy: screenshot & auto-delete */
+.no-screenshot {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.no-screenshot * {
+  -webkit-touch-callout: none;
+}
+.watermark {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  background: repeating-linear-gradient( -30deg, transparent 0 120px, rgba(255,255,255,.7) 120px 121px);
+  z-index: 9999;
+}
