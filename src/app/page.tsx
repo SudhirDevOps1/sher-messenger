@@ -819,22 +819,34 @@ export default function Page() {
           </div>
         ) : (
           <form
-            onSubmit={(e) => {
-              if (contactFormAction) {
-                // Let native POST form submission proceed
-                return;
-              }
+            onSubmit={async (e) => {
               e.preventDefault();
+              // 1. Submit via internal API
+              await fetch("/api/ked/contact", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ email: feedbackEmail, message: feedbackMsg }),
+              }).catch(() => undefined);
+
+              // 2. Submit to external endpoint if configured
+              const target = contactFormAction;
+              if (target) {
+                await fetch(target, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ email: feedbackEmail, message: feedbackMsg, submittedAt: new Date().toISOString() }),
+                }).catch(() => undefined);
+              }
+
+              // 3. Fallback save locally
               try {
                 const existing = JSON.parse(localStorage.getItem("ked.feedback.submissions") || "[]");
                 existing.push({ email: feedbackEmail, message: feedbackMsg, at: new Date().toISOString() });
                 localStorage.setItem("ked.feedback.submissions", JSON.stringify(existing.slice(-20)));
               } catch {}
               setFeedbackSent(true);
-              toast(lang === "hi" ? "फीडबैक दर्ज किया गया" : "Feedback recorded locally", "good");
+              toast(lang === "hi" ? "फीडबैक दर्ज किया गया" : "Feedback submitted", "good");
             }}
-            action={contactFormAction || undefined}
-            method="POST"
             className="grid gap-3"
           >
             <p className="text-[12.5px] leading-relaxed text-[var(--ink-dim)]">

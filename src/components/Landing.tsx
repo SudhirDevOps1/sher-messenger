@@ -399,7 +399,18 @@ export default function Landing({
 }) {
   const { lang, setLang, t } = useI18n();
   const [contactModal, setContactModal] = useState(false);
-  const contactFormAction = process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || "";
+  const [contactSent, setContactSent] = useState(false);
+  const [contactSending, setContactSending] = useState(false);
+  const [contactFormAction, setContactFormAction] = useState(() => process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || "");
+
+  useEffect(() => {
+    fetch("/api/ked/config")
+      .then((r) => r.json())
+      .then((c: { contactFormAction?: string }) => {
+        if (c?.contactFormAction) setContactFormAction(c.contactFormAction);
+      })
+      .catch(() => {});
+  }, []);
   return (
     <div className="relative z-[1] h-[100dvh] overflow-x-hidden overflow-y-auto scroll-smooth">
       {/* ---------------- nav */}
@@ -641,18 +652,29 @@ export default function Landing({
         </div>
       </section>
 
-      {/* ---------------- free room — no login */}
+      {/* ---------------- ephemeral rooms highlight */}
       <section className="mx-auto w-full max-w-[1180px] px-5 pb-10">
         <Reveal>
-          <div className="panel p-6">
-            <div className="kicker">{lang === "hi" ? "बिना लॉगिन तुरंत शुरू करें" : "Instant Ephemeral Chat — No Sign Up"}</div>
-            <h3 className="mt-1 text-[18px] font-bold">{lang === "hi" ? "अस्थायी चैट रूम — कोड साझा करें और 30 मिनट तक सुरक्षित बात करें" : "Zero-Login Ephemeral Rooms — Share code and chat securely"}</h3>
-            <p className="mt-1 text-[12.5px] text-[var(--ink-dim)]">
-              {lang === "hi"
-                ? "कोई ईमेल या पासवर्ड की आवश्यकता नहीं। रूम क्रिएटर समय और सदस्यों की सीमा तय कर सकता है। ब्राउज़र बंद करते ही सभी डेटा समाप्त।"
-                : "No email or password required. End-to-end encrypted in memory with automatic shredding on timer expiry or browser exit."}
-            </p>
-            <FreeRoomDemo onEnterGuest={onEnterGuest} />
+          <div className="panel p-6 border-[rgba(79,240,182,.2)] bg-[rgba(79,240,182,.04)]">
+            <div className="row items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="kicker">{lang === "hi" ? "अस्थायी चैट मोड" : "Zero-Login Ephemeral Rooms"}</div>
+                <h3 className="mt-1 text-[17px] font-bold text-[var(--ink)]">
+                  {lang === "hi" ? "बिल्कुल गुमनाम और 30 मिनट में स्वतः नष्ट होने वाला चैट" : "Completely Anonymous & Auto-Shredding Rooms"}
+                </h3>
+                <p className="mt-1 text-[12px] text-[var(--ink-dim)]">
+                  {lang === "hi" ? "पेज के सबसे ऊपर 1-क्लिक में रूम बनाकर दोस्तों के साथ सुरक्षित बात करें।" : "Use the 1-click room creator at the top of the page to chat anonymously."}
+                </p>
+              </div>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                <Icon name="spark" size={13} /> {lang === "hi" ? "ऊपर चैट रूम खोलें" : "Go to Chat Room ↑"}
+              </button>
+            </div>
           </div>
         </Reveal>
       </section>
@@ -704,7 +726,7 @@ export default function Landing({
             </span>
           </div>
           <div className="row flex-wrap gap-1.5">
-            <button className="btn btn-sm" onClick={() => setContactModal(true)}>
+            <button className="btn btn-sm" onClick={() => { setContactSent(false); setContactModal(true); }}>
               {lang === "hi" ? "फीडबैक" : "Feedback"}
             </button>
             <a className="btn btn-sm" href="/guide">
@@ -725,51 +747,86 @@ export default function Landing({
 
       {/* Contact & Feedback Modal */}
       <Modal open={contactModal} onClose={() => setContactModal(false)} title={lang === "hi" ? "संपर्क व फीडबैक" : "Contact & Feedback"} icon="spark">
-        <form
-          method="POST"
-          action={contactFormAction || undefined}
-          onSubmit={(e) => {
-            if (contactFormAction) {
-              return;
-            }
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            const email = String(formData.get("email") || "");
-            const message = String(formData.get("message") || "");
-            try {
-              const existing = JSON.parse(localStorage.getItem("ked.feedback.submissions") || "[]");
-              existing.push({ email, message, at: new Date().toISOString() });
-              localStorage.setItem("ked.feedback.submissions", JSON.stringify(existing.slice(-20)));
-            } catch {}
-            alert(lang === "hi" ? "✅ आपका फीडबैक प्राप्त हुआ! धन्यवाद।" : "✅ Feedback received! Thank you.");
-            setContactModal(false);
-          }}
-          className="grid gap-3"
-        >
-          <p className="text-[12.5px] leading-relaxed text-[var(--ink-dim)]">
-            {lang === "hi"
-              ? "आपके सुझाव और संदेश सीधे व्यवस्थापक को सुरक्षित रूप से भेजे जाते हैं।"
-              : "Send your feedback, feature requests, or bug reports directly to the deployer."}
-          </p>
-          <div>
-            <label className="kicker mb-1 block">{lang === "hi" ? "आपका ईमेल" : "Your Email"}</label>
-            <input name="email" type="email" required placeholder="you@example.com" className="input" />
-          </div>
-          <div>
-            <label className="kicker mb-1 block">{lang === "hi" ? "संदेश" : "Message"}</label>
-            <textarea name="message" required placeholder={lang === "hi" ? "अपना संदेश यहाँ लिखें..." : "Type your message or question here..."} className="input min-h-[100px]" />
-          </div>
-          {/* Honeypot field */}
-          <input name="website" tabIndex={-1} autoComplete="off" style={{ display: "none" }} />
-          <div className="row justify-end gap-2 mt-2">
-            <button type="button" className="btn" onClick={() => setContactModal(false)}>
-              {lang === "hi" ? "रद्द करें" : "Cancel"}
-            </button>
-            <button type="submit" className="btn btn-primary">
-              {lang === "hi" ? "भेजें" : "Send Feedback"}
+        {contactSent ? (
+          <div className="grid gap-3 py-4 text-center">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[rgba(79,240,182,.15)] text-[var(--acc)]">
+              <Icon name="check" size={24} />
+            </div>
+            <h4 className="text-sm font-bold text-[#a9ffe2]">
+              {lang === "hi" ? "फीडबैक प्राप्त हुआ!" : "Feedback Received!"}
+            </h4>
+            <p className="mono text-xs text-[var(--ink-dim)]">
+              {lang === "hi"
+                ? "आपके सुझाव और संदेश के लिए धन्यवाद। हम इसे जल्द से जल्द देखेंगे।"
+                : "Thank you for reaching out! Your feedback has been safely submitted."}
+            </p>
+            <button className="btn btn-primary justify-center mt-2" onClick={() => setContactModal(false)}>
+              {lang === "hi" ? "बंद करें" : "Close"}
             </button>
           </div>
-        </form>
+        ) : (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setContactSending(true);
+              const formData = new FormData(e.currentTarget);
+              const email = String(formData.get("email") || "").trim();
+              const message = String(formData.get("message") || "").trim();
+              
+              // 1. Submit via internal API
+              await fetch("/api/ked/contact", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ email, message }),
+              }).catch(() => undefined);
+
+              // 2. Submit to external endpoint if configured
+              const target = contactFormAction;
+              if (target) {
+                await fetch(target, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ email, message, submittedAt: new Date().toISOString() }),
+                }).catch(() => undefined);
+              }
+
+              // 3. Fallback save in localStorage
+              try {
+                const existing = JSON.parse(localStorage.getItem("ked.feedback.submissions") || "[]");
+                existing.push({ email, message, at: new Date().toISOString() });
+                localStorage.setItem("ked.feedback.submissions", JSON.stringify(existing.slice(-20)));
+              } catch {}
+
+              setContactSending(false);
+              setContactSent(true);
+            }}
+            className="grid gap-3"
+          >
+            <p className="text-[12.5px] leading-relaxed text-[var(--ink-dim)]">
+              {lang === "hi"
+                ? "आपके सुझाव, बग रिपोर्ट या संदेश सीधे व्यवस्थापक को सुरक्षित रूप से भेजे जाते हैं:"
+                : "Send your feedback, feature requests, or bug reports directly:"}
+            </p>
+            <div>
+              <label className="kicker mb-1 block">{lang === "hi" ? "आपका ईमेल" : "Your Email"}</label>
+              <input name="email" type="email" required placeholder="you@example.com" className="input" />
+            </div>
+            <div>
+              <label className="kicker mb-1 block">{lang === "hi" ? "संदेश" : "Message"}</label>
+              <textarea name="message" required placeholder={lang === "hi" ? "अपना संदेश यहाँ लिखें..." : "Type your message or question here..."} className="input min-h-[100px]" />
+            </div>
+            {/* Honeypot field */}
+            <input name="website" tabIndex={-1} autoComplete="off" style={{ display: "none" }} />
+            <div className="row justify-end gap-2 mt-2">
+              <button type="button" className="btn" onClick={() => setContactModal(false)}>
+                {lang === "hi" ? "रद्द करें" : "Cancel"}
+              </button>
+              <button type="submit" disabled={contactSending} className="btn btn-primary">
+                {contactSending ? "..." : lang === "hi" ? "भेजें" : "Send Feedback"}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

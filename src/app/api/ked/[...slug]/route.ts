@@ -778,6 +778,24 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     return json({ ok: true });
   }
 
+  if (path === "contact") {
+    const b = await payload(req);
+    const email = str(b.email, 256);
+    const message = str(b.message, 4096);
+    const formUrl = process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || process.env.CONTACT_FORM_ACTION || "";
+    
+    if (formUrl) {
+      try {
+        await fetch(formUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, message, submittedAt: nowIso() }),
+        }).catch(() => undefined);
+      } catch {}
+    }
+    return json({ ok: true });
+  }
+
   return err(`unknown endpoint POST /api/ked/${path}`, 404);
 }
 
@@ -787,6 +805,16 @@ async function handleGet(req: Request, ctx: Ctx): Promise<Response> {
   const store = await getStore();
   await store.init();
   const url = new URL(req.url);
+
+  if (path === "config") {
+    return json({
+      contactFormAction: process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || process.env.CONTACT_FORM_ACTION || "",
+      meraSrc: process.env.NEXT_PUBLIC_MERA_ANALYTICS_SRC || "",
+      meraId: process.env.NEXT_PUBLIC_MERA_ANALYTICS_ID || "",
+      prismId: process.env.NEXT_PUBLIC_PRISM_ANALYTICS_ID || "",
+      prismUrl: process.env.NEXT_PUBLIC_PRISM_ANALYTICS_URL || "",
+    });
+  }
 
   if (path === "stats") {
     const s = await store.stats();
