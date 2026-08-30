@@ -538,6 +538,7 @@ export function Chat({
   blur: boolean;
   sentryHint: string;
 }) {
+  const { lang, t } = useI18n();
   const [draft, setDraft] = useState("");
   const [ttl, setTtl] = useState<number | null>(null);
   const [reply, setReply] = useState<HistMsg | null>(null);
@@ -610,7 +611,13 @@ export function Chat({
 
   const [screenAlert, setScreenAlert] = useState<string | null>(null);
   const [windowBlurred, setWindowBlurred] = useState(false);
-  const [shieldActive, setShieldActive] = useState(false);
+  const [shieldActive, setShieldActive] = useState(() => {
+    try {
+      return localStorage.getItem("ked.shield") !== "false";
+    } catch {
+      return true;
+    }
+  });
 
   // Snapchat-style screenshot & capture detection
   useEffect(() => {
@@ -763,9 +770,17 @@ export function Chat({
           <button
             className={`btn btn-sm ${shieldActive ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
             title="Toggle Anti-Snoop Shield (Auto-blurs chat when window loses focus)"
-            onClick={() => setShieldActive((v) => !v)}
+            onClick={() => {
+              setShieldActive((prev) => {
+                const next = !prev;
+                try {
+                  localStorage.setItem("ked.shield", String(next));
+                } catch {}
+                return next;
+              });
+            }}
           >
-            <Icon name="shield" size={13} /> {shieldActive ? "Shield On" : "Shield"}
+            <Icon name="shield" size={13} /> {shieldActive ? (lang === "hi" ? "शील्ड सक्रिय" : "Shield On") : (lang === "hi" ? "शील्ड" : "Shield")}
           </button>
           <button
             className="btn btn-icon btn-sm"
