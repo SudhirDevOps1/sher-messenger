@@ -817,6 +817,9 @@ export class KedClient {
     }
 
     const history = this.data.history[item.roomId] ?? [];
+    const existingIndex = history.findIndex((m) => m.id === item.id);
+    const existing = existingIndex >= 0 ? history[existingIndex] : null;
+
     const msg: HistMsg = {
       id: item.id,
       roomId: item.roomId,
@@ -828,13 +831,18 @@ export class KedClient {
       expiresAt: item.expiresAt ? Date.parse(item.expiresAt) : null,
       destroyed: false,
       attachment: (value.attachment as AttachmentRef) ?? null,
-      readBy: [],
-      reactions: {},
+      readBy: existing ? existing.readBy : [],
+      reactions: existing ? existing.reactions : {},
       replyTo: value.replyTo ? String(value.replyTo) : null,
       verified: true,
       seq: item.seq,
     };
-    this.data.history[item.roomId] = [...history, msg].slice(-HISTORY_CAP);
+    if (existingIndex >= 0) {
+      history[existingIndex] = { ...existing, ...msg };
+      this.data.history[item.roomId] = [...history];
+    } else {
+      this.data.history[item.roomId] = [...history, msg].slice(-HISTORY_CAP);
+    }
     if (!mine && this.data.settings.readReceipts) void this.sendReceipt(item.roomId, [item.id]);
     if (!mine && this.onInbound) await this.onInbound(item, value as Record<string, unknown>);
   }
@@ -1074,7 +1082,15 @@ export class KedClient {
       verified: true,
       seq: wireSeq,
     };
-    this.data.history[opts.roomId] = [...(this.data.history[opts.roomId] ?? []), msg].slice(-HISTORY_CAP);
+    if (wireId) this.data.seen[wireId] = 1;
+    const existingList = this.data.history[opts.roomId] ?? [];
+    const idx = existingList.findIndex((m) => m.id === wireId);
+    if (idx >= 0) {
+      existingList[idx] = msg;
+      this.data.history[opts.roomId] = [...existingList];
+    } else {
+      this.data.history[opts.roomId] = [...existingList, msg].slice(-HISTORY_CAP);
+    }
     this.ledger("message.sealed", `${(text || attachment?.name || "file").slice(0, 24)}… → AES-256-GCM, ${ttl ? `burns in ${Math.round(ttl / 1000)}s` : "no TTL"}`);
     await this.persist();
     this.notify();

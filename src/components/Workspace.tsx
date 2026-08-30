@@ -148,7 +148,7 @@ function Bubble({
     );
 
   const me = msg.me;
-  const sameAsPrev = prev && prev.me === msg.me && msg.at - prev.at < 4 * 60_000 && !msg.replyTo;
+  const sameAsPrev = prev && prev.me === msg.me && prev.from === msg.from && msg.at - prev.at < 4 * 60_000 && !msg.replyTo;
   const total = msg.expiresAt ? Math.max(1, msg.expiresAt - msg.at) : 1;
 
   const act = async (fn: () => Promise<unknown>) => {
