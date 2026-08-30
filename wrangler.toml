@@ -16,11 +16,10 @@ binding = "ASSETS"
 
 [vars]
 BACKEND_TARGET = "workers"
-# Zero-config one-click deploy: volatile but fully functional. Add TURSO_URL and
-# TURSO_TOKEN in the dashboard, then switch these two values to libsql/turso for
-# persistence. The UI exposes the active adapter so this can never be mistaken.
-DB_TARGET = "memory"
-SHER_DB = "memory"
+# DB layer is now dashboard-driven — do NOT hardcode DB_TARGET / SHER_DB here
+# or every deploy will reset your Runtime variables (Neon/Turso) back to memory.
+# Set DB_TARGET and SHER_DB as Text variables in Cloudflare Dashboard > Settings > Variables.
+# Zero-config fallback (no dashboard vars) is still memory via src/server/store.ts selection order.
 SHER_INVITE_ONLY = "1"
 SHER_RATE_LIMIT = "on"
 
@@ -33,7 +32,6 @@ workers_dev = true
 
 [env.staging.vars]
 BACKEND_TARGET = "workers"
-DB_TARGET = "memory"
-SHER_DB = "memory"
+# staging also dashboard-driven — keep DB vars out of file
 SHER_INVITE_ONLY = "1"
 SHER_RATE_LIMIT = "on"
