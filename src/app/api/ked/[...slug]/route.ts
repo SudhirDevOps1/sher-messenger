@@ -650,6 +650,12 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     return json({ ok: true, count: rooms.length });
   }
 
+  if (path === "admin/prune" && isAdmin) {
+    const shredded = await store.shredExpired();
+    await store.audit(admin!.user.id, "database.pruned", `Pruned expired messages, attachments & sessions (count=${shredded})`, nowIso());
+    return json({ ok: true, count: shredded, message: "Database vacuumed and expired records purged." });
+  }
+
   if (path === "admin/users" && isAdmin) {
     const rows = await store.listUsers(300);
     return json({

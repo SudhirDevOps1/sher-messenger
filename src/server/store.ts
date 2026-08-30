@@ -651,15 +651,32 @@ export class SqlStore implements Store {
   }
 
   async destroyMessage(id: string): Promise<void> {
-    await this.run(`UPDATE ked_messages SET body=NULL, destroyed_at=$2 WHERE id=$1`, [id, new Date().toISOString()]);
+    await this.run(`DELETE FROM ked_messages WHERE id=$1`, [id]);
   }
 
   async shredExpired(): Promise<number> {
     const now = new Date().toISOString();
-    const due = await this.run(`SELECT id FROM ked_messages WHERE expires_at IS NOT NULL AND expires_at < $1 AND body IS NOT NULL`, [now]);
-    for (const d of due) await this.run(`UPDATE ked_messages SET body=NULL, destroyed_at=$2 WHERE id=$1`, [d.id, now]);
-    const atts = await this.run(`SELECT id FROM ked_attachments WHERE expires_at IS NOT NULL AND expires_at < $1`, [now]);
-    for (const a of atts) await this.run(`UPDATE ked_attachments SET data='' , destroyed_at=$2 WHERE id=$1`, [a.id, now]);
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 1. Hard-delete expired and destroyed attachments immediately to reclaim heavy DB storage
+    await this.run(`DELETE FROM ked_attachments WHERE (expires_at IS NOT NULL AND expires_at < $1) OR destroyed_at IS NOT NULL OR data=''`, [now]);
+
+    // 2. Hard-delete expired messages and destroyed tombstones
+    const due = await this.run(`SELECT id FROM ked_messages WHERE (expires_at IS NOT NULL AND expires_at < $1) OR (destroyed_at IS NOT NULL AND destroyed_at < $2)`, [now, tenMinAgo]);
+    if (due.length) {
+      await this.run(`DELETE FROM ked_messages WHERE (expires_at IS NOT NULL AND expires_at < $1) OR (destroyed_at IS NOT NULL AND destroyed_at < $2)`, [now, tenMinAgo]);
+    }
+
+    // 3. Hard-delete expired auth sessions & revoked sessions
+    await this.run(`DELETE FROM ked_auth_sessions WHERE expires_at < $1 OR revoked_at IS NOT NULL`, [now]);
+
+    // 4. Hard-delete stale rate limit buckets older than 1 hour
+    await this.run(`DELETE FROM ked_rate WHERE window_start < $1`, [Date.now() - 3600_000]);
+
+    // 5. Hard-delete old audit log entries older than 7 days
+    await this.run(`DELETE FROM ked_audit WHERE created_at < $1`, [sevenDaysAgo]);
+
     return due.length;
   }
 
@@ -682,7 +699,7 @@ export class SqlStore implements Store {
   }
 
   async destroyAttachment(id: string): Promise<void> {
-    await this.run(`UPDATE ked_attachments SET data='', destroyed_at=$2 WHERE id=$1`, [id, new Date().toISOString()]);
+    await this.run(`DELETE FROM ked_attachments WHERE id=$1`, [id]);
   }
 
 
@@ -1044,19 +1061,16 @@ class MemoryStore implements Store {
   }
   async destroyMessage(id: string) {
     const idx = this.msgs.findIndex((x) => x.id === id);
-    if (idx >= 0) this.msgs[idx] = { ...this.msgs[idx], body: null, destroyedAt: new Date().toISOString() };
+    if (idx >= 0) this.msgs.splice(idx, 1);
   }
   async shredExpired() {
     const now = new Date().toISOString();
-    let n = 0;
-    for (let i = 0; i < this.msgs.length; i++) {
-      const m = this.msgs[i];
-      if (m.expiresAt && m.expiresAt < now && m.body) {
-        this.msgs[i] = { ...m, body: null, destroyedAt: now };
-        n++;
-      }
+    const before = this.msgs.length;
+    this.msgs = this.msgs.filter((m) => !m.expiresAt || m.expiresAt >= now);
+    for (const [id, a] of this.atts.entries()) {
+      if (a.expiresAt && a.expiresAt < now) this.atts.delete(id);
     }
-    return n;
+    return before - this.msgs.length;
   }
   async countBySender(userId: string) {
     return this.msgs.filter((m) => m.senderId === userId).length;
@@ -1068,8 +1082,7 @@ class MemoryStore implements Store {
     return this.atts.get(id) ?? null;
   }
   async destroyAttachment(id: string) {
-    const a = this.atts.get(id);
-    if (a) this.atts.set(id, { ...a, data: "" });
+    this.atts.delete(id);
   }
 
   /* ---------------------------------------------------------------- invites / admin (memory) */

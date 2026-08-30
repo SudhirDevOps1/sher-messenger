@@ -347,23 +347,53 @@ export default function MaskedAdminPage() {
         )}
 
         {tab === "overview" && (
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-5 space-y-2">
-              <div className="kicker">ENCRYPTION PROTOCOL</div>
-              <div className="text-lg font-bold text-[#a9ffe2]">Hardcore E2EE #k=</div>
-              <div className="text-xs text-[var(--ink-dim)]">WebCrypto AES-256-GCM + PBKDF2 250k</div>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-5 space-y-2">
+                <div className="kicker">ENCRYPTION PROTOCOL</div>
+                <div className="text-lg font-bold text-[#a9ffe2]">Hardcore E2EE #k=</div>
+                <div className="text-xs text-[var(--ink-dim)]">WebCrypto AES-256-GCM + PBKDF2 250k</div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-5 space-y-2">
+                <div className="kicker">PLAINTEXT MESSAGES IN STORAGE</div>
+                <div className="text-lg font-bold text-[#a9ffe2]">0 Rows</div>
+                <div className="text-xs text-[var(--ink-dim)]">Mathematically impossible for server to read</div>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-5 space-y-2">
+                <div className="kicker">RELAY ENGINE</div>
+                <div className="text-lg font-bold text-[#a9ffe2]">Durable Objects / Edge</div>
+                <div className="text-xs text-[var(--ink-dim)]">WebSocket Hibernation Mode Active</div>
+              </div>
             </div>
 
-            <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-5 space-y-2">
-              <div className="kicker">PLAINTEXT MESSAGES IN STORAGE</div>
-              <div className="text-lg font-bold text-[#a9ffe2]">0 Rows</div>
-              <div className="text-xs text-[var(--ink-dim)]">Mathematically impossible for server to read</div>
-            </div>
-
-            <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-5 space-y-2">
-              <div className="kicker">RELAY ENGINE</div>
-              <div className="text-lg font-bold text-[#a9ffe2]">Durable Objects / Edge</div>
-              <div className="text-xs text-[var(--ink-dim)]">WebSocket Hibernation Mode Active</div>
+            <div className="rounded-2xl border border-[var(--line)] bg-[#0d121d]/80 p-6 space-y-4">
+              <h2 className="text-base font-bold text-[#a9ffe2]">
+                {lang === "hi" ? "डेटाबेस स्टोरेज वैक्यूम एवं डिस्क सफाई" : "Database Storage Vacuum & Purge"}
+              </h2>
+              <p className="text-xs text-[var(--ink-dim)]">
+                {lang === "hi"
+                  ? "एक्सपायर हो चुके संदेश, अटैचमेंट, और मृत सेशन्स को हार्ड-डिलीट करके Neon/Postgres डिस्क स्पेस खाली करें।"
+                  : "Hard-delete expired messages, orphaned attachments, dead sessions, and stale rate buckets to free up Neon / Postgres storage."}
+              </p>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/ked/admin/prune", {
+                      method: "POST",
+                      headers: { authorization: `Bearer ${token}` },
+                    });
+                    const d = await res.json();
+                    alert(d.message || "Database storage pruned & vacuumed!");
+                  } catch (e) {
+                    alert("Prune failed: " + (e as Error).message);
+                  }
+                }}
+                className="btn btn-sm !border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]"
+              >
+                <Icon name="trash" size={14} /> {lang === "hi" ? "डेटाबेस स्टोरेज साफ करें (Prune & Free Disk)" : "Vacuum & Free Database Storage"}
+              </button>
             </div>
           </div>
         )}
