@@ -55,3 +55,26 @@ universe. `body = NULL` is housekeeping, not the security boundary.
 - **Store:** `localStorage` key `ked.vault.v1.<username>` → `{n: "v1", c: "v1.<iv>.<ciphertext>", salt: "<16B b64>", at: <ts>}`. `c` is `seal(vaultKey, JSON.stringify(VaultData), utf8(username))` (`src/lib/client.ts:229`). VaultData holds private keys, contacts, sessions, history, ledger — never plaintext on disk.
 - **What's plaintext on the relay:** only ciphertext `body = iv.ct`, public headers, opaque ids (`u_…`, `r_…`), `size`/`createdAt`, and `code_hash` hashes. The relay cannot derive the vault key from the stored PBKDF2 verifier (different salt + lower cost).
 - **Clear cache / Wipe:** user clicks Clear cache or Panic wipe → `ls.del(vaultKeyFor(username))` + `ss.clear()` + `POST /api/ked/me/delete {confirm:"DELETE"}` or `POST /api/ked/panic {confirm:"WIPE"}` → server `purgeUser` does `body=NULL, destroyed_at=now`, revokes sessions, blanks `vault_salt/vault_blob/ik_pub/opk_pubs`. Without the passphrase the remaining ciphertext is permanent noise.
+
+## Manual Database Purge & 0 MB Disk Reclaim (Neon / Postgres)
+
+To instantly clear all historical messages, attachments, ephemeral rooms, and reclaim 100% of allocated disk storage on Neon / Postgres, execute:
+
+```sql
+-- 1. Purge all message bodies & attachment blobs
+DELETE FROM ked_messages;
+DELETE FROM ked_attachments;
+
+-- 2. Purge ephemeral rooms, room codes, and temporary memberships
+DELETE FROM ked_room_members;
+DELETE FROM ked_room_codes;
+DELETE FROM ked_rooms;
+
+-- 3. Purge expired sessions, rate limit buckets & audit logs
+DELETE FROM ked_auth_sessions;
+DELETE FROM ked_rate;
+DELETE FROM ked_audit;
+
+-- 4. Immediately reclaim allocated disk space on Postgres / Neon
+VACUUM FULL;
+```

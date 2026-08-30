@@ -69,3 +69,28 @@ The admin console is masked at `/{ADMIN_PATH}` (default: `/sh3r-9x-admin`).
 | **Room Keys & Plaintext Messages** | RAM Only | Tab Lifetime | 💨 Destroyed immediately on tab close |
 | **Server Room State** | Durable Object Memory | Room TTL (≤120m) | Evicted and memory zeroed on timer expiry |
 | **Admin Policy & Blind Logs** | Cloudflare D1 | 30 days rolling | Automated sweep purges old blind logs |
+
+---
+
+## 🧹 Neon Serverless Postgres Storage Reset (0 MB Maintenance)
+
+If self-hosting with Neon Postgres, run these SQL statements in the Neon Console SQL Editor to immediately purge stale records and reclaim allocated disk storage:
+
+```sql
+-- 1. Purge all message bodies & attachment blobs
+DELETE FROM ked_messages;
+DELETE FROM ked_attachments;
+
+-- 2. Purge ephemeral rooms, room codes, and temporary memberships
+DELETE FROM ked_room_members;
+DELETE FROM ked_room_codes;
+DELETE FROM ked_rooms;
+
+-- 3. Purge expired sessions, rate limit buckets & audit logs
+DELETE FROM ked_auth_sessions;
+DELETE FROM ked_rate;
+DELETE FROM ked_audit;
+
+-- 4. Immediately reclaim allocated disk space on Postgres / Neon
+VACUUM FULL;
+```

@@ -163,17 +163,45 @@ curl -s localhost:3000/api/dev-selftest?relay=1 # 3. conformance must be allOk:t
 Pass criteria: login works, a known conversation decrypts, `dev-selftest` reports `allOk:true`.
 Record the date + result in `CHANGELOG.md`.
 
-## Free-tier budget
+## Free-tier budget & database maintenance
 
 | Resource | Free limit | This app's usage | Warn at |
-| --- | --- | --- | --- |
+| :--- | :--- | :--- | :--- |
 | Relay requests (Vercel/CF) | 100k/day CF · ~1M/mo Vercel-Hobby | poll every 1.6s while a tab is open ≈ 2250 req/h/tab; idle tabs are the main cost | 80% |
 | Neon storage | 0.5 GB | ciphertext + metadata; attachments are the growth risk | 400 MB |
 | Turso | ~5 GB, 500M row reads/mo | same | 4 GB |
 | CF D1 | 5 GB, 5M reads, 100k writes/day | one write per message | 80k writes |
 | R2 | 10 GB, zero egress | attachment blobs (2 MB cap each) | 8 GB |
 
-**Levers when approaching a limit:** raise the poll interval (`setInterval` in `client.ts`), raise
+### Neon / Postgres Storage Purge & Disk Reclaim (0 MB Reset)
+
+To immediately purge stale data and reclaim disk space on Neon Serverless Postgres (resetting usage near 0 MB), run this in the Neon SQL Editor or via `psql`:
+
+```sql
+-- 1. Purge all message bodies & attachment blobs
+DELETE FROM ked_messages;
+DELETE FROM ked_attachments;
+
+-- 2. Purge ephemeral rooms, room codes, and temporary memberships
+DELETE FROM ked_room_members;
+DELETE FROM ked_room_codes;
+DELETE FROM ked_rooms;
+
+-- 3. Purge expired sessions, rate limit buckets & audit logs
+DELETE FROM ked_auth_sessions;
+DELETE FROM ked_rate;
+DELETE FROM ked_audit;
+
+-- 4. Immediately reclaim allocated disk space on Postgres / Neon
+VACUUM FULL;
+```
+
+**Single-command terminal execution via `psql`:**
+```bash
+psql "$DATABASE_URL" -c "DELETE FROM ked_messages; DELETE FROM ked_attachments; DELETE FROM ked_room_members; DELETE FROM ked_room_codes; DELETE FROM ked_rooms; DELETE FROM ked_auth_sessions; DELETE FROM ked_rate; DELETE FROM ked_audit; VACUUM FULL;"
+```
+
+**Levers when approaching a limit:** run `VACUUM FULL;` in Neon, raise the poll interval (`setInterval` in `client.ts`), raise
 `SHER_INVITE_ONLY` discipline (fewer tabs), shorten default TTLs (smaller `body` inventory), move attachments
 to R2, enable `SHER_MAINTENANCE=1` to shed load gracefully.
 
