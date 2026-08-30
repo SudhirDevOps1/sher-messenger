@@ -1,20 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self' wss: https:",
+  "connect-src 'self' wss: https: http:",
   "media-src 'self' blob: data:",
   "object-src 'none'",
   "base-uri 'self'",
-  "frame-ancestors 'none'",
   "form-action 'self'",
-  "require-trusted-types-for 'script'",
 ].join("; ");
 
 export const metadata: Metadata = {
@@ -58,7 +57,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <meta name="apple-mobile-web-app-title" content="SHER Messenger" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

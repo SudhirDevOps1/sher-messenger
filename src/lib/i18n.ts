@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 
 export type Lang = "en" | "hi";
 
@@ -22,8 +22,12 @@ export const dict: Record<Lang, Record<string, string>> = {
     heroDesc: "Create an ephemeral room, set a 30-minute timer, and share the 6-character code. All messages are encrypted directly in your browser with Web Crypto AES-256-GCM. When the timer expires or you close the tab, everything is permanently destroyed.",
 
     // Ephemeral Room Actions
+    createRoomTitle: "Create Ephemeral Room",
+    createRoomDesc: "No signup or password required. Start a private room in seconds.",
     createRoomCardTitle: "Create Ephemeral Room",
     createRoomCardDesc: "No signup or password required. Start a private room in seconds.",
+    joinRoomTitle: "Join with Room Code",
+    joinRoomDesc: "Enter the 6-character code shared by your peer to enter instantly.",
     joinRoomCardTitle: "Join with Room Code",
     joinRoomCardDesc: "Enter the 6-character code shared by your peer to enter instantly.",
     displayName: "Your Display Name",
@@ -31,6 +35,9 @@ export const dict: Record<Lang, Record<string, string>> = {
     roomName: "Room Name (Optional)",
     roomNamePlaceholder: "e.g., Private Discussion",
     maxParticipants: "Max Participants",
+    roomCapacity: "Room Capacity",
+    usersCount: "users max",
+    roomCode: "Room Code",
     roomDuration: "Room Duration (Auto-burn)",
     createRoomBtn: "Create & Enter Room",
     enterRoomCode: "6-Character Room Code",
@@ -118,8 +125,12 @@ export const dict: Record<Lang, Record<string, string>> = {
     heroDesc: "एक अस्थायी रूम बनाएं, अधिकतम 30 मिनट का समय सेट करें और 6-अक्षरों का कोड शेयर करें। सभी संदेश आपके ब्राउज़र में Web Crypto AES-256-GCM द्वारा सुरक्षित होते हैं। समय समाप्त होने पर या ब्राउज़र बंद करते ही सारा डेटा हमेशा के लिए मिट जाता है।",
 
     // Ephemeral Room Actions
+    createRoomTitle: "नया अस्थायी रूम बनाएं",
+    createRoomDesc: "बिना किसी लॉगिन या पासवर्ड के तुरंत एक सुरक्षित रूम शुरू करें।",
     createRoomCardTitle: "नया अस्थायी रूम बनाएं",
     createRoomCardDesc: "बिना किसी लॉगिन या पासवर्ड के तुरंत एक सुरक्षित रूम शुरू करें।",
+    joinRoomTitle: "रूम कोड से जुड़ें",
+    joinRoomDesc: "अपने साथी द्वारा साझा किया गया 6-अक्षरों का कोड दर्ज करके तुरंत प्रवेश करें।",
     joinRoomCardTitle: "रूम कोड से जुड़ें",
     joinRoomCardDesc: "अपने साथी द्वारा साझा किया गया 6-अक्षरों का कोड दर्ज करके तुरंत प्रवेश करें।",
     displayName: "आपका नाम (Display Name)",
@@ -127,6 +138,9 @@ export const dict: Record<Lang, Record<string, string>> = {
     roomName: "रूम का नाम (वैकल्पिक)",
     roomNamePlaceholder: "उदा. निजी चर्चा",
     maxParticipants: "अधिकतम सदस्य संख्या",
+    roomCapacity: "सदस्य क्षमता",
+    usersCount: "अधिकतम सदस्य",
+    roomCode: "रूम कोड",
     roomDuration: "रूम की समय सीमा (स्वतः नष्ट)",
     createRoomBtn: "रूम बनाएं और प्रवेश करें",
     enterRoomCode: "6-अक्षरों का रूम कोड",
@@ -209,4 +223,32 @@ export const I18nCtx = createContext<{
   setLang: () => {},
 });
 
-export const useI18n = () => useContext(I18nCtx);
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>("en");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ked.lang") as Lang;
+      if (saved === "hi" || saved === "en") setLangState(saved);
+    } catch {}
+  }, []);
+
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    try {
+      localStorage.setItem("ked.lang", l);
+    } catch {}
+  };
+
+  const t = (k: string): string => {
+    return dict[lang]?.[k] ?? dict.en[k] ?? k;
+  };
+
+  return createElement(I18nCtx.Provider, { value: { lang, t, setLang } }, children);
+}
+
+export function useI18n() {
+  const ctx = useContext(I18nCtx);
+  return ctx;
+}
+

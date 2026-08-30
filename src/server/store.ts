@@ -1252,92 +1252,104 @@ async function buildStore(): Promise<Store> {
   cachedKey = key;
 
   if (want !== "memory" && sqlitePath && (want === "sqlite" || !pgUrl)) {
-    const { DatabaseSync } = await import("node:sqlite");
-    const handle = new DatabaseSync(sqlitePath);
-    const store = new SqlStore(
-      {
-        name: "node:sqlite",
-        lite: true,
-        async exec(sql: string, params: unknown[]) {
-          const stmt = handle.prepare(sql);
-          const args = params.map((p) => (typeof p === "number" || typeof p === "string" || p === null || p === undefined ? (p as string | number | null) : String(p)));
-          if (/^\s*(select|with)/i.test(sql)) return (stmt.all(...args) as Row[]) ?? [];
-          stmt.run(...args);
-          return [];
+    try {
+      const { DatabaseSync } = await import("node:sqlite");
+      const handle = new DatabaseSync(sqlitePath);
+      const store = new SqlStore(
+        {
+          name: "node:sqlite",
+          lite: true,
+          async exec(sql: string, params: unknown[]) {
+            const stmt = handle.prepare(sql);
+            const args = params.map((p) => (typeof p === "number" || typeof p === "string" || p === null || p === undefined ? (p as string | number | null) : String(p)));
+            if (/^\s*(select|with)/i.test(sql)) return (stmt.all(...args) as Row[]) ?? [];
+            stmt.run(...args);
+            return [];
+          },
         },
-      },
-      "sqlite (node:sqlite, file)",
-    );
-    await store.init();
-    cached = store;
-    return store;
+        "sqlite (node:sqlite, file)",
+      );
+      await store.init();
+      cached = store;
+      return store;
+    } catch (e) {
+      console.warn("SQLite init error, falling back:", (e as Error).message);
+    }
   }
 
   if (want !== "memory" && (env.TURSO_URL || env.LIBSQL_URL) && (want === "turso" || !pgUrl)) {
-    const base = (env.TURSO_URL || env.LIBSQL_URL)!.replace(/^libsql:\/\//, "https://").replace(/\/$/, "");
-    const token = env.TURSO_TOKEN || env.LIBSQL_TOKEN || "";
-    const store = new SqlStore(
-      {
-        name: "libSQL/HTTP",
-        lite: true,
-        async exec(sql: string, params: unknown[]) {
-          const res = await fetch(`${base}/transaction?wait=1`, {
-            method: "POST",
-            headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              statements: [
-                {
-                  stmt: sql,
-                  args: params.map((p) => ({
-                    type: typeof p === "number" ? "integer" : "string",
-                    value: p === null || p === undefined ? null : typeof p === "number" ? String(Math.trunc(p)) : String(p),
-                  })),
-                },
-              ],
-            }),
-          });
-          if (!res.ok) throw new Error(`turso ${res.status}: ${(await res.text()).slice(0, 300)}`);
-          const json = (await res.json()) as { results?: { rows?: unknown[][] }[] };
-          const result = json.results?.[0];
-          const cols = (result as { cols?: { name: string }[] } | undefined)?.cols ?? [];
-          return (result?.rows ?? []).map((row) => {
-            const o: Row = {};
-            cols.forEach((c, i) => (o[c.name] = (row as unknown[])[i]));
-            if (!cols.length) (row as unknown[]).forEach((v, i) => (o[String(i)] = v));
-            return o;
-          });
+    try {
+      const base = (env.TURSO_URL || env.LIBSQL_URL)!.replace(/^libsql:\/\//, "https://").replace(/\/$/, "");
+      const token = env.TURSO_TOKEN || env.LIBSQL_TOKEN || "";
+      const store = new SqlStore(
+        {
+          name: "libSQL/HTTP",
+          lite: true,
+          async exec(sql: string, params: unknown[]) {
+            const res = await fetch(`${base}/transaction?wait=1`, {
+              method: "POST",
+              headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                statements: [
+                  {
+                    stmt: sql,
+                    args: params.map((p) => ({
+                      type: typeof p === "number" ? "integer" : "string",
+                      value: p === null || p === undefined ? null : typeof p === "number" ? String(Math.trunc(p)) : String(p),
+                    })),
+                  },
+                ],
+              }),
+            });
+            if (!res.ok) throw new Error(`turso ${res.status}: ${(await res.text()).slice(0, 300)}`);
+            const json = (await res.json()) as { results?: { rows?: unknown[][] }[] };
+            const result = json.results?.[0];
+            const cols = (result as { cols?: { name: string }[] } | undefined)?.cols ?? [];
+            return (result?.rows ?? []).map((row) => {
+              const o: Row = {};
+              cols.forEach((c, i) => (o[c.name] = (row as unknown[])[i]));
+              if (!cols.length) (row as unknown[]).forEach((v, i) => (o[String(i)] = v));
+              return o;
+            });
+          },
         },
-      },
-      "turso (libSQL over HTTP)",
-    );
-    await store.init();
-    cached = store;
-    return store;
+        "turso (libSQL over HTTP)",
+      );
+      await store.init();
+      cached = store;
+      return store;
+    } catch (e) {
+      console.warn("Turso init error, falling back:", (e as Error).message);
+    }
   }
 
   if (want !== "memory" && pgUrl) {
-    const { Pool } = await import("pg");
-    const needsSsl = /sslmode=require|neon\.tech|supabase\./.test(pgUrl) && !/127\.0\.0\.1|localhost/.test(pgUrl);
-    const pool = new Pool({
-      connectionString: pgUrl.replace(/mode=pool(&|$)/, ""),
-      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-      max: 5,
-      connectionTimeoutMillis: 8000,
-    });
-    const store = new SqlStore(
-      {
-        name: "postgres",
-        lite: false,
-        async exec(sql: string, params: unknown[]) {
-          const res = await pool.query(sql, params as never[]);
-          return (res.rows as Row[]) ?? [];
+    try {
+      const { Pool } = await import("pg");
+      const needsSsl = /sslmode=require|neon\.tech|supabase\./.test(pgUrl) && !/127\.0\.0\.1|localhost/.test(pgUrl);
+      const pool = new Pool({
+        connectionString: pgUrl.replace(/mode=pool(&|$)/, ""),
+        ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+        max: 5,
+        connectionTimeoutMillis: 8000,
+      });
+      const store = new SqlStore(
+        {
+          name: "postgres",
+          lite: false,
+          async exec(sql: string, params: unknown[]) {
+            const res = await pool.query(sql, params as never[]);
+            return (res.rows as Row[]) ?? [];
+          },
         },
-      },
-      "postgres (Neon / Supabase / RDS / local, via pg)",
-    );
-    await store.init();
-    cached = store;
-    return store;
+        "postgres (Neon / Supabase / RDS / local, via pg)",
+      );
+      await store.init();
+      cached = store;
+      return store;
+    } catch (e) {
+      console.warn("Postgres init error, falling back:", (e as Error).message);
+    }
   }
 
   const mem = new MemoryStore();
