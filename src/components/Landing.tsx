@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Chip, Icon, Modal } from "./ui";
+import { Chip, GitHubStars, Icon, Modal } from "./ui";
 import { useI18n, type Lang } from "@/lib/i18n";
 import { KedClient } from "@/lib/client";
 
@@ -438,9 +438,10 @@ export default function Landing({
               Docs
             </a>
           </nav>
-          <div className="row gap-1.5">
+          <div className="row gap-1.5 flex-wrap">
+            <GitHubStars className="hidden sm:inline-flex" />
             <button className="btn btn-sm" onClick={() => setContactModal(true)}>
-              <Icon name="spark" size={13} /> {lang === "hi" ? "फीडबैक" : "Feedback"}
+              <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "फीडबैक" : "Feedback"}</span>
             </button>
             <button className="btn btn-sm" onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); try { localStorage.setItem("ked.lang", n); } catch {} }}>
               {lang === "en" ? "हिंदी" : "EN"}
@@ -462,9 +463,12 @@ export default function Landing({
 
         <div className="mx-auto w-full max-w-[900px] text-center">
           <Reveal>
-            <span className="chip chip-good mx-auto inline-flex">
-              <span className="dot" /> free · open source · MIT licensed
-            </span>
+            <div className="row justify-center items-center gap-2 flex-wrap">
+              <span className="chip chip-good inline-flex">
+                <span className="dot" /> free · open source · MIT licensed
+              </span>
+              <GitHubStars />
+            </div>
           </Reveal>
 
           <Reveal delay={90}>

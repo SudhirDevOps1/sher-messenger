@@ -5,7 +5,7 @@ import Auth, { type AuthResult } from "@/components/Auth";
 import Landing from "@/components/Landing";
 import { Chat, Sidebar } from "@/components/Workspace";
 import Inspector, { SealDetails, type InspectorTab } from "@/components/Inspector";
-import { Chip, Icon, Modal } from "@/components/ui";
+import { Chip, GitHubStars, Icon, Modal } from "@/components/ui";
 import { KedClient, type HistMsg } from "@/lib/client";
 import { ensureSentry, type SentryHandle } from "@/lib/sentry";
 import { safeJson } from "@/lib/safeFetch";
@@ -467,6 +467,7 @@ export default function Page() {
             <span className="hidden lg:inline capitalize text-[11px]">{themeAccent}</span>
           </button>
 
+          <GitHubStars className="hidden sm:inline-flex" />
           <button
             className="btn btn-sm"
             onClick={() => {

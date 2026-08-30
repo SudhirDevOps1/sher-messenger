@@ -599,15 +599,23 @@ export function Chat({
     }
   };
 
-  // Snapchat-style screenshot & capture detection (keyboard + snipping tool overlay focus loss)
+  const [screenAlert, setScreenAlert] = useState<string | null>(null);
+  const [windowBlurred, setWindowBlurred] = useState(false);
+  const [shieldActive, setShieldActive] = useState(false);
+
+  // Snapchat-style screenshot & capture detection
   useEffect(() => {
     if (!roomId) return;
     let lastAlert = 0;
     const notifyScreenshot = async (reason = "screen capture") => {
-      const now = Date.now();
-      if (now - lastAlert < 4000) return; // debounce
-      lastAlert = now;
+      const currentTime = Date.now();
+      if (currentTime - lastAlert < 3000) return; // debounce
+      lastAlert = currentTime;
+      setScreenAlert(`📸 Screen capture attempt (${reason}) detected!`);
+      setTimeout(() => setScreenAlert(null), 4500);
+
       try {
+        client.ledger("privacy.screenshot", `Attempted ${reason} detected in room ${roomId.slice(0, 8)}`);
         await client.send({
           roomId,
           text: `📸 [PRIVACY ALERT] @${client.username || "Member"} took/attempted a ${reason}!`,
@@ -616,29 +624,45 @@ export function Chat({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
+      const key = e.key ? e.key.toLowerCase() : "";
       if (
         key === "printscreen" ||
+        key === "snapshot" ||
         (e.ctrlKey && key === "p") ||
         (e.metaKey && e.shiftKey && (key === "3" || key === "4" || key === "5" || key === "s")) ||
         (e.ctrlKey && e.shiftKey && (key === "s" || key === "c" || key === "i")) ||
         (e.altKey && key === "printscreen") ||
         key === "f12"
       ) {
-        void notifyScreenshot("screenshot / screen-grab shortcut");
+        void notifyScreenshot(key === "printscreen" ? "PrintScreen" : "screen-grab shortcut");
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "printscreen") void notifyScreenshot("screenshot (PrintScreen)");
+      const key = e.key ? e.key.toLowerCase() : "";
+      if (key === "printscreen" || key === "snapshot") {
+        void notifyScreenshot("PrintScreen");
+      }
+    };
+
+    const handleBlur = () => {
+      setWindowBlurred(true);
+    };
+
+    const handleFocus = () => {
+      setWindowBlurred(false);
     };
 
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [client, roomId]);
 
@@ -727,15 +751,38 @@ export function Chat({
           >
             <Icon name="flame" size={13} /> {room.ttl ? `${Math.round(room.ttl / 1000)}s` : "burn off"}
           </button>
-          <button className="btn btn-icon btn-sm" title="Session inspector" onClick={onOpenInspector}>
+          <button
+            className={`btn btn-sm ${shieldActive ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
+            title="Toggle Anti-Snoop Shield (Auto-blurs chat when window loses focus)"
+            onClick={() => setShieldActive((v) => !v)}
+          >
+            <Icon name="shield" size={13} /> {shieldActive ? "Shield On" : "Shield"}
+          </button>
+          <button
+            className="btn btn-icon btn-sm"
+            title="Session inspector"
+            onClick={onOpenInspector}
+          >
             <Icon name="key" size={14} />
           </button>
         </div>
       </header>
 
+      {screenAlert ? (
+        <div className="mx-4 mt-2 row items-center justify-between gap-2 rounded-xl border border-[rgba(255,107,122,.5)] bg-[rgba(255,107,122,.18)] px-3 py-2 text-xs font-semibold text-[#ffc2c9] shadow-lg animate-pulse z-20">
+          <span className="row gap-2">
+            <Icon name="alert" size={14} className="text-[#ff6b7a]" />
+            {screenAlert}
+          </span>
+          <button className="text-[11px] text-white/70 hover:text-white px-1" onClick={() => setScreenAlert(null)}>
+            ✕
+          </button>
+        </div>
+      ) : null}
+
       <FireOverlay active={burning} text={burnText} />
 
-      <div ref={listRef} className={`scroll min-h-0 flex-1 px-4 py-3 ${blur ? "secret" : ""} ${burning ? "fire-incinerate" : ""}`}>
+      <div ref={listRef} className={`scroll min-h-0 flex-1 px-4 py-3 ${blur || (shieldActive && windowBlurred) ? "secret" : ""} ${burning ? "fire-incinerate" : ""}`}>
         {list.length === 0 ? (
           <div className="mono mx-auto mt-16 max-w-[60ch] rounded-xl border border-dashed border-[var(--line-strong)] p-5 text-[11.5px] leading-relaxed text-[var(--ink-dim)]">
             Empty room. Your first message carries an X3DH prekey bundle in its header, so the peer can build the matching session even

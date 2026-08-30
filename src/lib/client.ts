@@ -621,7 +621,7 @@ export class KedClient {
     return this.persistNow();
   }
 
-  private ledger(kind: string, note: string) {
+  public ledger(kind: string, note: string) {
     this.data.ledger = [{ t: Date.now(), kind, note }, ...this.data.ledger].slice(0, LEDGER_CAP);
   }
 
