@@ -26,6 +26,15 @@ curl -sSI "$HOST" | tr -d '\r' | grep -Ei \
 - Next's runtime requires inline bootstrapping in this build, hence `'unsafe-inline'` is currently present for scripts/styles. Removing it requires framework-generated CSP nonces wired through middleware. Treat that as a tracked hardening item, not as “done”.
 - Fonts are local system fonts; no font CDN is allowlisted. `font-src` is restricted to self/data only.
 - Do not enable COEP `require-corp` until attachment downloads and cross-origin isolation is tested; an incorrect COEP breaks blob previews.
+- **Screenshot / watermark notes:** `style-src` must allow the same-origin `globals.css` that carries `.no-screenshot { user-select:none; -webkit-touch-callout:none }` and `.watermark { repeating-linear-gradient }` — these are pure CSS, no `img-src` needed. Do not add `allow-popups` or loosen `frame-ancestors` (stays `'none'`) — the watermark + `X-Frame-Options: DENY` + `frame-ancestors 'none'` together deter drag-out and framing capture.
+
+## Extreme-privacy headers & client friction (post 9c95ee7)
+
+For defence-in-depth beyond headers:
+
+- **Headers remain strict:** `default-src 'self'`; no `eval`; `object-src 'none'`; `frame-ancestors 'none'`; `COOP: same-origin`. API: `Cache-Control: no-store, private`.
+- **Client friction (not a header but documented here for verify):** `src/app/page.tsx:174` blocks `copy` outside inputs, `contextmenu` prevented, `PrintScreen`/`Ctrl+P`/`Ctrl+Shift+S` intercepted with a toast, `visibilitychange`/`blur` applies `filter: blur(7px)` via `.secret`. Validate after deploy with `curl -SI` + manual `PrintScreen` test (expect toast + `secret` class while unfocused, and watermark `repeating-linear-gradient` at 4% opacity).
+- **Honesty:** OS-level screenshot cannot be blocked 100% (camera, VM, hardware capture). The control is **friction + watermark + blur-after-download**; the ledger still records `msg.shredded`/`message.burned` content-free. This matches `THREAT-MODEL.md` > Screenshot / download friction.
 
 ## External verification
 

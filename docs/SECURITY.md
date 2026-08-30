@@ -51,16 +51,29 @@ research authorised, will not pursue legal action, and will not invoke the Terms
 
 **No hand-rolled primitives.** Every operation above calls a browser/Node WebCrypto function.
 
+## Public web, hidden admin (dual gate)
+
+- **Web is public** — `GET /` needs no auth, so anyone can open the shell and check the build. No admin link is rendered in nav.
+- **Admin is hidden + dual-gated** — every `/api/ked/admin/*` handler checks `isAdmin` bearer role (`src/app/api/ked/[...slug]/route.ts:522`), and the UI adds a first gate: `POST /api/ked/admin/env-auth` (`route.ts:464`) compares `ADMIN_EMAIL`/`ADMIN_PASSWORD` (or `SHER_ADMIN_*`) from env against the typed values with `timingSafe()`. Both `ADMIN_EMAIL` **and** `ADMIN_PASSWORD` must be set as encrypted Secrets (Cloudflare `wrangler secret put …`, Vercel Env Secrets, Render Secrets); without them the endpoint returns `500 admin env not configured`. The flag `ked.admin.env` lives only in `sessionStorage` and is cleared on tab close. Rate-limited via `admin-env` token bucket.
+
+## Ephemeral rooms & screenshot friction
+
+- **Room codes:** `POST /api/ked/rooms/code` / `consumeRoomCode` checks `maxUsers` (2-30) + `expiresAt` (≤30m) + `uses < maxUsers` + `members < maxUsers` before `joinRoom`. Codes are 6-char, stored as `SHA-256` only (`ked_room_codes` in `src/server/store.ts`).
+- **30m auto-burn:** server `shredExpired()` nulls `body` on expiry; client `burnDue()` (700ms) zeroes local `HistMsg`. After the window, no admin or forensics can reconstitute plaintext.
+- **Screenshot/download friction:** CSS `.no-screenshot` (`user-select:none`, `-webkit-touch-callout:none`), `.watermark` (`repeating-linear-gradient(-30deg)`), `contextmenu`/`copy` block, key intercept for `PrintScreen`/`Ctrl+P`/`Ctrl+Shift+S` with toast, blur while unfocused (`secret` class) — detailed in `THREAT-MODEL.md` and `PRIVACY_POLICY.md`. This is friction + watermark + blur-after-download, not a 100% guarantee (OS screenshot cannot be fully blocked).
+
 ## Hardening checklist (verified)
 
-- [x] CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, `X-Frame-Options` on every response
+- [x] CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, `X-Frame-Options` on every response (see `SECURITY-HEADERS.md` for the `no-screenshot` / watermark CSP notes)
 - [x] HSTS (via `netlify.toml` / `public/_headers` / Caddyfile)
 - [x] no `eval`, no `dangerouslySetInnerHTML` on user content, no remote scripts
-- [x] per-route token buckets + 6-strike 15-minute lockout
-- [x] invite codes hashed at rest, single-use default, expiry, admin-only minting
+- [x] per-route token buckets (`admin-env`, `rooms`, `register`, `login`, `send`, `sync`) + 6-strike 15-minute lockout
+- [x] invite codes hashed at rest, single-use default, expiry, admin-only minting; room codes likewise hashed, 6-char, `maxUsers` capped
 - [x] bearer tokens SHA-256 hashed at rest, 30-day expiry, per-device revocation
 - [x] relay never returns HTML on error (`/api/ked/__crash-test` proves it)
-- [x] secrets only via env; `.env` gitignored, `.env.example` has placeholders
+- [x] secrets only via env; `.env` gitignored, `.env.example` has placeholders (`ADMIN_EMAIL`/`ADMIN_PASSWORD` documented)
 - [x] WebSocket/realtime origin pinning documented for the WS adapter
+- [x] `beforeunload` auto-delete: `sessionStorage.clear()` + ephemeral history wipe; `blur`/`secret` + watermark
+- [x] local vault `ked.vault.v1.<username>` at rest = `AES-256-GCM(vaultKey, JSON.stringify(VaultData), utf8(username))` where `vaultKey = PBKDF2(passphrase, 16B random salt, 750k)` (`src/lib/client.ts`)
 - [ ] TOTP second factor on `/admin` (roadmap)
 - [ ] third-party audit (roadmap)

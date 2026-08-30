@@ -3,9 +3,19 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
-## [Unreleased]
+## [Unreleased] — 0.1.3 (extreme privacy rewrite, commit 9c95ee7)
 
 ### Added
+- **Public web + hidden admin** — web is public, `/admin` never linked. Dual gate: `POST /api/ked/admin/env-auth` (`src/app/api/ked/[...slug]/route.ts:464`) checks both `ADMIN_EMAIL` + `ADMIN_PASSWORD` (or `SHER_ADMIN_*`) from env (Cloudflare/Vercel Secrets) plus an admin invite bearer token for every `admin/*` route (`route.ts:522`). `src/app/admin/page.tsx` sessionStorage gate + `.env.example` docs.
+- **Public room codes (ephemeral, 30m)** — `POST /api/ked/rooms/code` (`route.ts:278`) creates an ephemeral `group` room (`maxUsers` 2-30, `ttlMs` 60k-30*60k **hard cap 30*60_000**) and mints a 6-char code into `ked_room_codes` (`src/server/store.ts` `RoomCodeRow`, DDL for `ked_room_codes`, `SqlStore` + `MemoryStore`). `POST /api/ked/rooms/join` (`route.ts:307`) consumes the code with `maxUsers` + `expiresAt` + `revokedAt` checks via `consumeRoomCode`.
+- **30m auto-burn ephemerals** — code-rooms carry `defaultTtl <=30m` (server enforces `Math.min`). `store.shredExpired()` (every `GET /sync`) nulls `body`, `KedClient.burnDue()` every **700ms** (`src/lib/client.ts`) zeroes local `HistMsg`. After 30m history is dead on both sides; ledger `message.burned` / `relay.shredded`.
+- **Auto-delete on browser close** — `src/app/page.tsx` `beforeunload` clears `sessionStorage` (`ked.resume.v1` tab key + `ked.admin.env`) and ephemeral local history; `.watermark` + `.secret` blur while unfocused. Next open requires the full passphrase.
+- **Screenshot / download friction** — CSS `.no-screenshot` (`user-select:none`, `-webkit-touch-callout:none`), `.watermark` (`repeating-linear-gradient(-30deg)`, `src/app/globals.css:447`), JS `contextmenu`/`copy` block, `PrintScreen`/`Ctrl+P`/`Ctrl+Shift+S` intercept with toast, blur while unfocused (`secret` class), ledger flag. Honesty: OS screenshot cannot be 100% blocked — only friction + watermark + blur-after-download.
+- **Local vault at rest & Clear cache** — `localStorage` `ked.vault.v1.<username>` stores `{n,c,salt,at}` where `c = AES-256-GCM(vaultKey, JSON.stringify(VaultData), utf8(username))`, `vaultKey = PBKDF2(passphrase, 16B random salt, 750_000)` (`src/lib/client.ts:229`). Clarifies what is encrypted vs. plaintext on the relay (ciphertext + opaque ids only) and that Clear cache / Wipe does `ls.del` + `ss.clear()` + server `store.purgeUser` shred.
+- **Production verify & easy deploy** — `RUNBOOK.md` #Cloudflare exact Build (`npx opennextjs-cloudflare build`) + Deploy (`npx wrangler deploy --env=""`) + Version (`echo "skip"` or deploy) wiring + Secrets setup, `README.md` deploy table, `CONTRIBUTING.md` smoke checks, `SECURITY-HEADERS.md` CSP notes for watermark.
+
+### Docs
+- `docs/README.md`, `docs/ARCHITECTURE.md` (ER model + data flow + key lifecycle), `docs/PRIVACY_POLICY.md`, `docs/THREAT-MODEL.md`, `docs/DATA-RETENTION.md`, `docs/SECURITY.md`, `docs/SECURITY-HEADERS.md`, `docs/RUNBOOK.md`, `docs/CONTRIBUTING.md` updated in place without removing existing content (see subsections above).
 
 ## [0.1.2] - 2026-08-30
 ### Fixed

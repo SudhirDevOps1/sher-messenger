@@ -61,11 +61,53 @@ flowchart LR
 | `/` | the messenger |
 | `/guide` | **how to use it + full deploy guide (Vercel / Netlify / Cloudflare / VPS-Docker)** |
 | `/plan` | PRD, crypto spec, wire format, threat model, API reference |
-| `/admin` | admin console (invites, users, broadcast, audit) — not publicly linked |
+| `/admin` | admin console (invites, users, broadcast, audit) — not publicly linked, requires env gate + bearer (see below) |
 | `/privacy` | privacy policy (matches the *actual* data-flow, no false claims) |
 | `/terms` | terms of use |
 | `/api/health` `/api/ked/healthz` `/api/ked/readyz` `/api/ked/version` | ops probes |
 | `/api/dev-selftest?relay=1` | 51-check conformance suite, live |
+
+### Public web, hidden admin (extreme privacy)
+
+The web app is **public** — anyone can open `/`. `/admin` is **never linked** from the UI and is gated by two factors:
+
+1. **Env gate** — `ADMIN_EMAIL` + `ADMIN_PASSWORD` (or `SHER_ADMIN_EMAIL` / `SHER_ADMIN_PASSWORD`) set as encrypted Secrets on Cloudflare / Vercel / Render. Nothing is exposed to the browser. The client must pass `POST /api/ked/admin/env-auth` (`src/app/api/ked/[...slug]/route.ts:464`) — rate-limited via `admin-env` bucket — before the bearer step appears. Without both env vars the endpoint returns `500 admin env not configured`.
+2. **Bearer gate** — a valid admin invite bearer token (`Authorization: Bearer <token>`) whose role is `admin`. All `/api/ked/admin/*` routes require it (`src/app/api/ked/[...slug]/route.ts:522`). Tokens are stored as `SHA-256` only.
+
+UI logic: `src/app/admin/page.tsx` keeps `ked.admin.env` in `sessionStorage` (tab-only); closing the tab clears the env-unlocked flag and forces re-auth. See `SECURITY.md` and `RUNBOOK.md` for operator setup.
+
+### Public room codes (ephemeral, 30m)
+
+Create an instant group room and share a 6-char code — no contact import, no pre-existing DM:
+
+```bash
+# as any authenticated user
+curl -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
+  -d '{"maxUsers":5,"ttlMs":1800000}' localhost:3000/api/ked/rooms/code
+# → {"ok":true,"roomId":"r_…","code":"a1b2c3","maxUsers":5,"expiresAt":"…"}
+# join with:
+curl -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
+  -d '{"code":"a1b2c3"}' localhost:3000/api/ked/rooms/join
+```
+
+- `POST /api/ked/rooms/code` — creator sets `maxUsers` (2-30, default 5) and `ttlMs` (60 000-30*60 000, default 30m, **hard cap 30m**). Mints a 6-char code into `ked_room_codes` (`src/server/store.ts`) and creates a `group` room whose `defaultTtl` = `ttlMs`.
+- `POST /api/ked/rooms/join` — consumes the code, checks `uses < maxUsers` and `expiresAt`, then `joinRoom`. Already-member re-join is idempotent. Rate-limited via the `rooms` bucket.
+
+Creator = first member; sharing the code = entering. Rooms auto-burn after `ttlMs` (see 30m auto-burn below). ER + flow details: `ARCHITECTURE.md`.
+
+### 30m auto-burn ephemerals
+
+Code-rooms use `defaultTtl <= 30m` (enforced server-side: `Math.min(ttl, 30*60_000)` in `route.ts:285`). After 30m:
+
+- **Server:** `store.shredExpired()` (called on every `/sync`) nulls `body` / `destroyedAt = now` for expired messages and attachments. History becomes tombstones.
+- **Client:** `burnDue()` in `src/lib/client.ts` runs every **700 ms**, and the server sweep runs every `GET /sync`. Expired local `HistMsg` entries are zeroed (`text=""`, `attachment=null`, `destroyed=true`).
+
+After the window, **history is dead on both sides** — no recovery, by design. See `ARCHITECTURE.md` > Ephemeral rooms & 30m auto-burn and `DATA-RETENTION.md`.
+
+### Auto-delete on browser close & screenshot friction
+
+- `src/app/page.tsx` registers `beforeunload` → `sessionStorage.clear()` (wipes `ked.resume.v1` tab key + `ked.admin.env`) and clears ephemeral local history for rooms with `ttl <= 30m`. Watermark + blur logic (`globals.css` + `secret` class) reinforces that next open requires the passphrase.
+- Screenshot/download friction (`globals.css` `.no-screenshot`, `.watermark` repeating-linear-gradient, `contextmenu`/`copy` block, `PrintScreen`/`Ctrl+P`/`Ctrl+Shift+S` intercept with toast, blur while unfocused via `secret`/`hidden` state). The ledger records `integrity.violation` / `message.burned` events. **OS-level screenshots cannot be blocked 100%** — this is friction + watermark + blur-after-download, not a guarantee. See `THREAT-MODEL.md` and `PRIVACY_POLICY.md`.
 
 ## Feature matrix
 
@@ -104,17 +146,17 @@ SHER_INVITE_ONLY=1 npm start
 
 ## Deploy (one command each)
 
-| Target | Command | Notes |
-| --- | --- | --- |
-| **Vercel** | `vercel --prod` | add `DATABASE_URL` (Neon). Use Neon's `-pooler` string. |
-| **Netlify** | `netlify deploy --build --prod` | `netlify.toml` + Next runtime committed |
-| **Cloudflare** | `npx opennextjs-cloudflare build && npx wrangler deploy` | OpenNext build + Wrangler dry-run verified; memory demo, Turso persistence |
-| **Deno Deploy** | click the badge or import the GitHub fork | Next auto-detection + Turso over HTTP |
-| **Render** | click the badge above, or `render blueprint launch` | `render.yaml` blueprint committed |
-| **Railway** | click the badge above, or `railway up` | `railway.json` committed |
-| **VPS / Docker** | `docker compose up -d --build` | `SHER_SQLITE_PATH=/data/sher-messenger.db` |
+| Target | Build | Deploy | Notes |
+| --- | --- | --- | --- |
+| **Vercel** | `vercel --prod` (framework auto) | one-click badge or `vercel --prod` | add `DATABASE_URL` (Neon). Use Neon's `-pooler` string. Set `ADMIN_EMAIL` + `ADMIN_PASSWORD` as Env Secrets if you want `/admin`. |
+| **Netlify** | `netlify deploy --build --prod` | same command | `netlify.toml` + Next runtime committed; add `ADMIN_EMAIL`/`ADMIN_PASSWORD` in Site → Env |
+| **Cloudflare** | `npx opennextjs-cloudflare build` | `npx wrangler deploy --env=""` | OpenNext build + Wrangler verified; memory demo, Turso persistence. In Cloudflare dashboard set **Build:** `npx opennextjs-cloudflare build`, **Deploy:** `npx wrangler deploy --env=""`, **Version:** `echo "skip"` *or* `npx wrangler deploy --env=""` depending on whether the UI shows Build/Deploy or Build/Version. Secrets: `npx wrangler secret put ADMIN_EMAIL` + `ADMIN_PASSWORD` + `TURSO_TOKEN`. |
+| **Deno Deploy** | click the badge or import the GitHub fork | auto | Next auto-detection + Turso over HTTP |
+| **Render** | click the badge above, or `render blueprint launch` | auto | `render.yaml` blueprint committed; add `ADMIN_EMAIL`/`ADMIN_PASSWORD` as Secrets |
+| **Railway** | click the badge above, or `railway up` | auto | `railway.json` committed |
+| **VPS / Docker** | `docker compose up -d --build` | `docker compose logs -f ked` | `SHER_SQLITE_PATH=/data/sher-messenger.db` |
 
-Full step-by-step with screenshots-level detail: **`/guide` §8–12**, or [`RUNBOOK.md`](./RUNBOOK.md).
+Full step-by-step with screenshots-level detail: **`/guide` §8–12**, or [`RUNBOOK.md`](./RUNBOOK.md). For production verify checks after deploy, see `RUNBOOK.md` § Production verify.
 
 ## Tech stack
 
@@ -148,7 +190,9 @@ docs/                    ARCHITECTURE · THREAT-MODEL · RUNBOOK · RETENTION ·
 [SECURITY](./SECURITY.md) · [PRIVACY](./PRIVACY_POLICY.md) · [TERMS](./TERMS.md) ·
 [DATA-RETENTION](./DATA-RETENTION.md) · [INCIDENT-RESPONSE](./INCIDENT-RESPONSE.md) ·
 [RUNBOOK](./RUNBOOK.md) · [SECURITY-HEADERS](./SECURITY-HEADERS.md) · [CONTRIBUTING](./CONTRIBUTING.md) ·
-[CHANGELOG](./CHANGELOG.md) · [LICENSE](./LICENSE) · [.env.example](./.env.example)
+[CHANGELOG](./CHANGELOG.md) · [LICENSE](../LICENSE) · [.env.example](../.env.example)
+
+> All links above are `docs/`-relative (e.g. `docs/ARCHITECTURE.md` from repo root, `./ARCHITECTURE.md` from `docs/README.md`).
 
 ## Reliability contract
 

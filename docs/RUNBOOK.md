@@ -21,8 +21,23 @@ netlify deploy --build --prod
 ```bash
 npm i -D @opennextjs/cloudflare wrangler
 npx wrangler secret put TURSO_TOKEN
-npx @opennextjs/cloudflare build && npx wrangler deploy
+npx wrangler secret put ADMIN_EMAIL
+npx wrangler secret put ADMIN_PASSWORD
+# exact build/deploy expected by dashboard:
+npx opennextjs-cloudflare build          # Build command in Cloudflare dashboard
+npx wrangler deploy --env=""             # Deploy command (no env name)
+# Version command in some UIs shows as:
+echo "skip"                              # alternative if the UI labels the slot "Version" instead of "Deploy"
+# or
+npx wrangler deploy --env=""             # use this when the UI shows Build + Version (not Build + Deploy)
 ```
+
+Cloudflare dashboard wiring (post-9c95ee7): **Build:** `npx opennextjs-cloudflare build` — **Deploy:** `npx wrangler deploy --env=""` — **Version:** `echo "skip"` *or* `npx wrangler deploy --env=""` depending on whether the UI exposes Build/Deploy or Build/Version. Secrets above are encrypted and never exposed to the web.
+
+### Vercel / Netlify one-click (extreme privacy)
+
+- **Vercel:** import fork → add `DATABASE_URL` (Neon `-pooler` string) → add Secrets `ADMIN_EMAIL` + `ADMIN_PASSWORD` in Environment Variables (mark Encrypted) → Deploy. `POST /api/ked/admin/env-auth` is then required before the admin token step.
+- **Netlify:** import fork (`netlify.toml` committed) → add `DATABASE_URL` + `ADMIN_EMAIL`/`ADMIN_PASSWORD` in Site → Environment → Deploy. Same env gate applies.
 
 ### VPS / Docker
 ```bash
@@ -39,7 +54,20 @@ TLS: put Caddy in front (`ked.example.com { reverse_proxy localhost:3000 }`) —
 2. Mint an admin invite: `POST /api/ked/admin/invites {"create":true,"role":"admin","maxUses":3}`.
 3. Save the returned `code` (shown once) and set `SHER_INVITE_ONLY=1` on the next deploy.
 4. Sign up a second identity with that invite → it is your admin; the first is a spare.
-5. Open `/admin` → Overview and confirm counters are non-zero.
+5. Configure `ADMIN_EMAIL` + `ADMIN_PASSWORD` as encrypted Secrets on the host (Cloudflare `wrangler secret put …`, Vercel/Netlify Env Secrets). Without both, `/admin` env gate returns `500`.
+6. Open `/admin` → first enter `ADMIN_EMAIL`/`ADMIN_PASSWORD` (POST `/api/ked/admin/env-auth`, `src/app/api/ked/[...slug]/route.ts:464`) → then paste the admin bearer token → Overview and confirm counters are non-zero.
+
+### Public web, hidden admin
+
+- Web stays public; `/admin` nav link is absent. The panel is unindexed and requires *both* the env gate and the bearer token. The env flag `ked.admin.env` lives in `sessionStorage` and clears on tab close.
+- To rotate admin secrets: update `ADMIN_EMAIL`/`ADMIN_PASSWORD` on the host and restart/redeploy; open tabs lose `sessionStorage` and must re-auth.
+
+### Ephemeral room codes (ops)
+
+- **Mint:** any authenticated user may `POST /api/ked/rooms/code {maxUsers:2-30, ttlMs:60_000-30*60_000}` — default `maxUsers=5`, `ttlMs=30m` (hard cap). Returns `{roomId, code, maxUsers, expiresAt}`. Stored as `ked_room_codes` with `code_hash = SHA-256(code)`.
+- **Join:** `POST /api/ked/rooms/join {code}` checks `revokedAt`, `expiresAt`, `uses < maxUsers`, `members < maxUsers` (`src/server/store.ts:consumeRoomCode`). Already-member is idempotent.
+- **Burn:** rooms have `default_ttl <=30m`; server `shredExpired` (every `/sync`) nulls `body`; client `burnDue` (700ms) zeroes local history. After the TTL the room is tombstoned; admin may `deleteRoom` if needed (zeroes bodies, deletes membership, revokes codes).
+- **Rate limits:** `rooms` bucket applies to `rooms/code`; `admin-env` bucket applies to `admin/env-auth`.
 
 ## Health & monitoring
 
@@ -49,9 +77,36 @@ TLS: put Caddy in front (`ked.example.com { reverse_proxy localhost:3000 }`) —
 | `GET /api/ked/readyz` | readiness (exercises the store; `503` on degradation) |
 | `GET /api/health` | platform probe: Postgres + selected adapter + counters |
 | `GET /api/ked/version` | build hash, adapter set, `inviteOnly` flag — footer checks this |
+| `POST /api/ked/admin/env-auth` | rate-limited env gate check (`admin-env` bucket) — expect `500` if `ADMIN_EMAIL`/`ADMIN_PASSWORD` not set |
+| `POST /api/ked/rooms/code` / `rooms/join` | ephemeral room flows — expect `403` if `maxUsers`/`code` invalid or `expired`/`full` |
 | `GET /api/dev-selftest?relay=1` | crypto + relay conformance; **wire this into CI and a Gatus check** |
 
 Suggested Gatus/Upptime check: `GET /api/ked/readyz`, expect `200` and `$.status == "ready"`, every 60s.
+
+## Production verify (after every deploy)
+
+Run this from your laptop against the live host:
+
+```bash
+HOST=https://your-host.example
+# 1. ops probes
+curl -fsS "$HOST/api/ked/healthz" | jq .
+curl -fsS "$HOST/api/ked/readyz" | jq .
+curl -fsS "$HOST/api/ked/version" | jq .build,.inviteOnly
+# 2. relay is never-HTML
+curl -sSI "$HOST/api/ked/__crash-test" | grep -i content-type  # must be application/json
+curl -fsS "$HOST/api/ked/__crash-test" | jq .error             # 500 JSON, not HTML
+# 3. admin env gate (expect 403 or 500, never 200 without valid env)
+curl -fsS -X POST "$HOST/api/ked/admin/env-auth" -H "content-type: application/json" -d '{"email":"x","pass":"y"}' | jq .
+# 4. room codes (need a real bearer — mint one via /admin after env gate)
+# curl -H "authorization: Bearer $ADMIN_TOKEN" -d '{"maxUsers":5,"ttlMs":60000}' -H "content-type: application/json" "$HOST/api/ked/rooms/code" | jq .
+# 5. headers (see SECURITY-HEADERS.md)
+curl -sSI "$HOST" | tr -d '\r' | grep -Ei 'content-security-policy|strict-transport-security|x-content|referrer|permissions|cross-origin'
+# 6. ciphertext-only (no plaintext in DB): cf. THREAT-MODEL verification
+curl -fsS "$HOST/api/dev-selftest?relay=1" | jq '.allOk,.passed,.total'
+```
+
+For Cloudflare, confirm in the dashboard that **Build:** `npx opennextjs-cloudflare build` and **Deploy:** `npx wrangler deploy --env=""` (Version: `echo "skip"` or the deploy command, per UI) are set, and that `ADMIN_EMAIL`/`ADMIN_PASSWORD` + `TURSO_TOKEN` appear under Secrets (encrypted).
 
 ## Rollback
 

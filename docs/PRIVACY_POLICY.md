@@ -37,6 +37,7 @@ never reaches this server. It is encrypted in your browser before it is sent, an
 | Public keys (IK/SPK/OPK) | they are public by definition | until rotated or deleted |
 | Audit rows (event class + opaque id, e.g. `msg.shredded`) | security visibility, **no content** | rolling 30 days |
 | Invite `code_hash`, uses, expiry, role | invite-only signup | until revoked |
+| Room code `code_hash` (6-char, `ked_room_codes`), `maxUsers`, uses, expiry | ephemeral group join without pre-sharing DMs; codes are SHA-256 hashed, never plaintext | until expiry (≤30m) or consumed / revoked; `expiresAt` enforces hard cap |
 | System notice text | operational broadcast — **explicitly not E2EE** | until cleared |
 
 ### (d) PLATFORM LOGS (not controlled by us)
@@ -67,6 +68,35 @@ rendering independent of any CDN.
 | Revocation | `/admin` → Users → revoke device | sessions die immediately |
 
 Retention detail per data type: see **DATA-RETENTION.md**. Threat model and residual risks: **THREAT-MODEL.md**.
+
+## What is stored encrypted on your device vs. plaintext on the relay
+
+- **Local device (encrypted at rest):** `localStorage` key `ked.vault.v1.<username>` holds `{n: "v1", c: "<iv>.<ciphertext>", salt: "16B random b64", at: timestamp}`. The `c` is `AES-256-GCM(vaultKey, JSON.stringify(VaultData), utf8(username))` where `vaultKey = PBKDF2(passphrase, salt, 750_000)` (`src/lib/client.ts`). `VaultData` includes your private keys (IK/SPK/OPK private halves), contacts, sessions, groups, history, ledger, settings. `sessionStorage` key `ked.resume.v1 = {username, token, key: b64(vaultKey)}` lives tab-only for fast resume and is cleared on tab close.
+- **On the relay (plaintext but content-free):** only routing ciphertext `body = iv.ct`, public headers (ECDH keys, signatures), opaque `roomId`/`senderId`/`userId`, `size`/`createdAt`/`destroyedAt`, `code_hash` for invites/room-codes, and SHA-256 bearer hashes. The relay never sees the vault key, passphrase, or plaintext.
+- **Clear cache / Wipe:** `localStorage.removeItem(ked.vault.v1.<username>)` + `sessionStorage.clear()` + server `store.purgeUser` (bodies nulled, sessions revoked). Next open requires the passphrase to re-derive the vault key; without it the stored envelope is noise.
+
+## Auto-delete on browser close
+
+When you close or reload the tab, `src/app/page.tsx` `beforeunload` handler runs: `sessionStorage.clear()` (kills `ked.resume.v1` and `ked.admin.env`), and ephemeral room histories (`ttl <= 30m`) are wiped locally (`client.data.history[roomId] = []`). The page also shows a faint `repeating-linear-gradient` watermark (`src/app/globals.css:.watermark`) and blurs content while unfocused (`secret` class) so the back/forward cache reveals no plaintext. **Next open requires the full passphrase** — there is no cookie-based auto-login.
+
+## 30m auto-burn ephemerals (code-rooms)
+
+Rooms created via `POST /api/ked/rooms/code` carry `defaultTtl <= 30m` (server enforces `Math.min(ttl, 30*60_000)` in `src/app/api/ked/[...slug]/route.ts:285`). After that window:
+
+- Server: `store.shredExpired()` (on every `GET /sync`) sets `body=NULL, destroyedAt=now` on expired rows; subsequent `sync` returns `destroyedAt` and no body.
+- Client: `KedClient.burnDue()` runs every **700ms** (`src/lib/client.ts`) and locally zeroes `HistMsg` entries whose `expiresAt <= now`. The ledger records `message.burned`.
+
+After 30m, history is dead on **both** sides — no admin can recover it, because the per-message key was already destroyed.
+
+## Screenshot / download friction (not a guarantee)
+
+Extreme-privacy mode adds friction, not prevention (OS screenshots cannot be blocked with 100% reliability):
+
+- CSS: `.no-screenshot { user-select:none; -webkit-touch-callout:none }` + `.watermark { repeating-linear-gradient(-30deg) }` (`src/app/globals.css`).
+- JS: `contextmenu` prevented, `copy` blocked outside inputs, `PrintScreen` / `Ctrl+P` / `Ctrl+Shift+S` intercepted with a toast (`src/app/page.tsx:181`), `blur`/`visibilitychange` applies `filter: blur(7px)` via `.secret`.
+- Ledger: any shred or burn is logged as `msg.shredded` / `message.burned` (content-free).
+
+We **do not** claim screenshots are impossible — a camera photo of the screen still works. The goal is friction + watermark trace + immediate blur-after-download, so casual drag-copy and print-to-PDF are deterred. Full threat analysis: `THREAT-MODEL.md` and `SECURITY-HEADERS.md` (CSP).
 
 ## Eligibility
 Invite-only personal messenger. Not directed at children. Not for unlawful content — see `/terms`.
