@@ -84,15 +84,21 @@ async function run() {
     }
   }
 
-  // 4. Update wrangler.toml
+  // 4. Update wrangler.toml with keep_vars, D1, and KV bindings
   const wranglerPath = path.join(process.cwd(), "wrangler.toml");
   if (fs.existsSync(wranglerPath)) {
     let toml = fs.readFileSync(wranglerPath, "utf8");
     if (!toml.includes("keep_vars = true")) {
       toml = toml.replace('workers_dev = true', 'workers_dev = true\n\nkeep_vars = true');
     }
+    if (d1Id && !toml.includes("database_name = \"sher-ops\"")) {
+      toml += `\n\n[[d1_databases]]\nbinding = "DB"\ndatabase_name = "sher-ops"\ndatabase_id = "${d1Id}"`;
+    }
+    if (kvId && !toml.includes("binding = \"KV\"")) {
+      toml += `\n\n[[kv_namespaces]]\nbinding = "KV"\nid = "${kvId}"`;
+    }
     fs.writeFileSync(wranglerPath, toml, "utf8");
-    success("wrangler.toml verified with keep_vars = true");
+    success("wrangler.toml updated with keep_vars = true, D1, and KV bindings");
   }
 
   // 5. Update .env if missing
