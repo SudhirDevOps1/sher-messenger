@@ -1,6 +1,6 @@
 {
   "name": "sher-messenger",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "SHER Messenger — zero-knowledge encrypted messenger",
   "license": "MIT",
   "private": true,

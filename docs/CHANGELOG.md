@@ -7,6 +7,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ### Added
 
+## [0.1.2] - 2026-08-30
+### Fixed
+- **Auth invite passthrough** — `src/app/page.tsx:197` now forwards `inviteCode` to `KedClient.register` (`src/lib/client.ts:335`), fixing UI `403 invite required` even when `?invite=` was detected (`src/components/Auth.tsx:73`).
+- **Relay catch-all** — rename `src/app/api/ked/[slug]/route.ts` → `src/app/api/ked/[...slug]/route.ts` (`src/app/api/ked/[...slug]/route.ts:19`) so `invite/check`, `admin/*`, `me/*` stop 404ing with HTML on Workers; `bootstrap-invite` guard now uses `counts.invites` (`src/app/api/ked/[...slug]/route.ts:442`) to avoid Worker 1101.
+- **Build config** — Cloudflare `Build: npx opennextjs-cloudflare build`, `Version: npx wrangler deploy --env=""` (was `versions upload` + missing build → `was not found`).
+
+### Added
+
 ## [0.1.1] - 2026-08-29
 ### Fixed
 - **Relay bootstrap** — `POST /api/ked/bootstrap-invite` now self-disables after first mint (`counts` + `listInvites` guard, `src/app/api/ked/[slug]/route.ts:440`), second call returns `409` even before first signup (fixes `bootstrap self-disables once an identity exists`).
