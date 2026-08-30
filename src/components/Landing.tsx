@@ -301,6 +301,34 @@ export default function Landing({
         </div>
       </section>
 
+      {/* ---------------- ephemeral public rooms */}
+      <section className="mx-auto w-full max-w-[1180px] px-5 py-10 md:py-16">
+        <Reveal>
+          <div className="panel relative overflow-hidden p-6 md:p-8">
+            <span className="glowline" />
+            <div className="kicker">extreme privacy — public, no login</div>
+            <h2 className="mt-2 text-[clamp(22px,3.6vw,30px)] font-bold tracking-[-0.02em]">Free 30-minute rooms — code se enter, bina login ke.</h2>
+            <p className="mt-2 max-w-[70ch] text-[13px] leading-relaxed text-[var(--ink-dim)]">
+              Web public khula rahega, <code>/admin</code> sirf <code>ADMIN_EMAIL</code>+<code>ADMIN_PASSWORD</code> env se khulta (bearer + env double-gate). Koi user aaya, <b>room banaya</b> → creator <code>maxUsers 2-30</code> + <code>30m</code> hard cap set karta → <b>6-char code</b> milta → code baanto, dusra user code dalte hi `rooms/join` → chat start. 30m baad `shredExpired` + `burnDue` se `body=NULL` server + local history blur, browser band karte hi `beforeunload` `sessionStorage` wipe.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
+                <div className="kicker">screenshot / download</div>
+                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">`.no-screenshot` + watermark + `copy/contextmenu` block + `PrintScreen` toast + `blur while unfocused`. OS photo 100% nahi rukta — friction + blur-after-download + ledger flag.</p>
+              </div>
+              <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
+                <div className="kicker">localStorage kya</div>
+                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">ked.vault handle = seal PBKDF2 750k AES-256-GCM n c salt at + ked.resume.v1 tab-only. Clear cache to ls.del plus ss.clear to no vault blob.</p>
+              </div>
+              <div className="rounded-xl border border-[var(--line)] bg-black/25 p-3">
+                <div className="kicker">clear cache ke baad</div>
+                <p className="mono mt-1 text-[11px] leading-relaxed text-[var(--ink-faint)]">Vault local se gaya, relay pe sirf `ciphertext` bacha — `passphrase` bina `unreadable`. Backup se restore ya naya identity.</p>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+
       {/* ---------------- how it works */}
       <section id="how" className="relative overflow-hidden px-5 py-20 md:py-28">
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 opacity-60">
