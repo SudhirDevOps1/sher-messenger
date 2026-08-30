@@ -126,6 +126,7 @@ export interface Store {
   listAuthSessions(id: string): Promise<AuthSessionRow[]>;
 
   ensureRoom(r: { id: string; type: string; createdBy: string | null; nameEnc?: string | null; defaultTtl?: number | null }): Promise<void>;
+  updateRoomTtl(roomId: string, ttlMs: number | null): Promise<void>;
   joinRoom(roomId: string, userId: string, wrappedKey: string | null): Promise<void>;
   roomsOf(userId: string): Promise<RoomRow[]>;
   isMember(roomId: string, userId: string): Promise<boolean>;
@@ -515,6 +516,10 @@ export class SqlStore implements Store {
       `INSERT INTO ked_rooms (id, type, created_at, name_enc, created_by, default_ttl) VALUES ($1,$2,$3,$4,$5,$6)`,
       [r.id, r.type, new Date().toISOString(), r.nameEnc ?? null, r.createdBy, r.defaultTtl ?? null],
     );
+  }
+
+  async updateRoomTtl(roomId: string, ttlMs: number | null): Promise<void> {
+    await this.run(`UPDATE ked_rooms SET default_ttl=$2 WHERE id=$1`, [roomId, ttlMs]);
   }
 
   async joinRoom(roomId: string, userId: string, wrappedKey: string | null): Promise<void> {
@@ -979,6 +984,10 @@ class MemoryStore implements Store {
         defaultTtl: r.defaultTtl ?? null,
         members: [],
       });
+  }
+  async updateRoomTtl(roomId: string, ttlMs: number | null) {
+    const r = this.rooms.get(roomId);
+    if (r) this.rooms.set(roomId, { ...r, defaultTtl: ttlMs });
   }
   async joinRoom(roomId: string, userId: string, wrappedKey: string | null) {
     const set = this.membership.get(roomId) ?? new Set<string>();

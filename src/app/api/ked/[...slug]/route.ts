@@ -614,6 +614,16 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
 
   if (path === "admin/audit" && isAdmin) return json({ events: await store.recentAudit(200) });
 
+  if (path === "admin/room-ttl" && isAdmin) {
+    const b = await payload(req);
+    const roomId = str(b.roomId, 80);
+    if (!roomId) return err("missing roomId", 422);
+    const ttlMs = typeof b.ttlMs === "number" ? Math.max(0, Math.min(30 * 60_000, Math.trunc(b.ttlMs))) : null;
+    await store.updateRoomTtl(roomId, ttlMs);
+    await store.audit(admin!.user.id, "room.ttl.admin", `${roomId.slice(0, 10)} ttl=${ttlMs}`, nowIso());
+    return json({ ok: true });
+  }
+
   if (path === "panic") {
     const me = await auth(req);
     if (!me) return err("unauthorised", 401);

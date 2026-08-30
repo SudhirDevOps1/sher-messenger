@@ -142,8 +142,8 @@ function FreeRoomDemo() {
   const [msg, setMsg] = useState<string | null>(null);
   const anon = () => {
     try {
-      let a = localStorage.getItem("ked.anon.id");
-      if (!a) { a = `anon_${Math.random().toString(36).slice(2, 10)}`; localStorage.setItem("ked.anon.id", a); }
+      let a = sessionStorage.getItem("ked.anon.id");
+      if (!a) { a = `anon_${Math.random().toString(36).slice(2, 10)}`; sessionStorage.setItem("ked.anon.id", a); }
       return a;
     } catch { return `anon_${Math.random().toString(36).slice(2, 10)}`; }
   };
