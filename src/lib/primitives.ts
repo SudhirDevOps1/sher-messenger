@@ -351,3 +351,55 @@ export async function deriveRoomId(a: B64, b: B64): Promise<string> {
   const parts = [a, b].sort();
   return hex(await sha256(...parts.map((p) => b64d(p)))).slice(0, 40);
 }
+
+/**
+ * Strips EXIF metadata (GPS, camera details, timestamps) from image files
+ * before client-side encryption, preventing location and device telemetry leaks.
+ */
+export async function stripExifMetadata(file: File): Promise<{ buf: Bytes; mime: string; name: string }> {
+  if (typeof window === "undefined" || !file.type.startsWith("image/")) {
+    return {
+      buf: new Uint8Array(await file.arrayBuffer()) as Bytes,
+      mime: file.type || "application/octet-stream",
+      name: file.name,
+    };
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        void file.arrayBuffer().then((b) => resolve({ buf: new Uint8Array(b) as Bytes, mime: file.type, name: file.name }));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      const outMime = file.type === "image/png" ? "image/png" : "image/jpeg";
+      canvas.toBlob(
+        async (blob) => {
+          if (!blob) {
+            const b = await file.arrayBuffer();
+            resolve({ buf: new Uint8Array(b) as Bytes, mime: file.type, name: file.name });
+            return;
+          }
+          const buf = new Uint8Array(await blob.arrayBuffer()) as Bytes;
+          resolve({ buf, mime: outMime, name: file.name });
+        },
+        outMime,
+        0.92,
+      );
+    };
+    img.onerror = async () => {
+      URL.revokeObjectURL(url);
+      const b = await file.arrayBuffer();
+      resolve({ buf: new Uint8Array(b) as Bytes, mime: file.type, name: file.name });
+    };
+    img.src = url;
+  });
+}
+

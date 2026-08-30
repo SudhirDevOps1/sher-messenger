@@ -487,6 +487,13 @@ export default function Page() {
           <button className="btn btn-sm" onClick={() => { setFeedbackSent(false); setFeedbackModal(true); }} title="Send feedback / Bug report">
             <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "फीडबैक" : "Feedback"}</span>
           </button>
+          <button
+            className="btn btn-sm !border-[rgba(255,107,122,.4)] !bg-[rgba(255,107,122,.12)] !text-[#ff9aa5] hover:!bg-[rgba(255,107,122,.25)]"
+            onClick={() => setModal("panic")}
+            title="Panic Wipe (Zero local data & shred sessions)"
+          >
+            <Icon name="alert" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "पैनिक वाइप" : "Panic"}</span>
+          </button>
           <a className="btn btn-sm" href="/guide" title="Kaise kaam karta hai + deploy guide">
             <Icon name="spark" size={13} /> <span className="hidden sm:inline">Guide</span>
           </a>

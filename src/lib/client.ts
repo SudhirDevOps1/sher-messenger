@@ -31,6 +31,7 @@ import {
   safetyNumber,
   seal,
   sha256,
+  stripExifMetadata,
   unpackEnvelope,
   utf8,
 } from "./primitives";
@@ -1020,8 +1021,8 @@ export class KedClient {
     let attachment: AttachmentRef | null = null;
     if (opts.file) {
       if (opts.file.size > 2_000_000) throw new Error("file too large for this relay (2 MB limit)");
-      const buf = new Uint8Array(await opts.file.arrayBuffer());
-      const enc = await encryptAttachment(buf, opts.file.name, opts.file.type || "application/octet-stream");
+      const sanitized = await stripExifMetadata(opts.file);
+      const enc = await encryptAttachment(sanitized.buf, sanitized.name, sanitized.mime);
       const up = await req<{ id: string }>(this.token, "attachment", {
         method: "POST",
         body: JSON.stringify({ roomId: opts.roomId, data: enc.cipherB64, sha: enc.key.sha, ttlMs: opts.ttlMs ?? undefined }),
