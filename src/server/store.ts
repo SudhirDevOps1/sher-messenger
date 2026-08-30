@@ -1323,6 +1323,42 @@ async function buildStore(): Promise<Store> {
     }
   }
 
+  if (want !== "memory" && pgUrl && /neon\.tech/.test(pgUrl)) {
+    try {
+      const u = new URL(pgUrl.replace(/mode=pool(&|$)/, ""));
+      const host = u.host;
+      const cleanPgUrl = pgUrl.replace(/mode=pool(&|$)/, "");
+      const store = new SqlStore(
+        {
+          name: "neon/http",
+          lite: false,
+          async exec(sql: string, params: unknown[]) {
+            const res = await fetch(`https://${host}/sql`, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "Neon-Connection-String": cleanPgUrl,
+              },
+              body: JSON.stringify({ query: sql, params }),
+            });
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(`neon http ${res.status}: ${text.slice(0, 300)}`);
+            }
+            const data = (await res.json()) as { rows?: Row[] };
+            return data.rows ?? [];
+          },
+        },
+        "postgres (Neon serverless over HTTP)",
+      );
+      await store.init();
+      cached = store;
+      return store;
+    } catch (e) {
+      console.warn("Neon HTTP init error, trying TCP fallback:", (e as Error).message);
+    }
+  }
+
   if (want !== "memory" && pgUrl) {
     try {
       const { Pool } = await import("pg");
@@ -1331,8 +1367,9 @@ async function buildStore(): Promise<Store> {
         connectionString: pgUrl.replace(/mode=pool(&|$)/, ""),
         ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
         max: 5,
-        connectionTimeoutMillis: 8000,
+        connectionTimeoutMillis: 3000,
       });
+      await pool.query("SELECT 1");
       const store = new SqlStore(
         {
           name: "postgres",
@@ -1348,7 +1385,7 @@ async function buildStore(): Promise<Store> {
       cached = store;
       return store;
     } catch (e) {
-      console.warn("Postgres init error, falling back:", (e as Error).message);
+      console.warn("Postgres init error, falling back to in-memory relay:", (e as Error).message);
     }
   }
 
