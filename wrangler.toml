@@ -16,12 +16,19 @@ binding = "ASSETS"
 
 [vars]
 BACKEND_TARGET = "workers"
-# DB layer is now dashboard-driven — do NOT hardcode DB_TARGET / SHER_DB here
-# or every deploy will reset your Runtime variables (Neon/Turso) back to memory.
-# Set DB_TARGET and SHER_DB as Text variables in Cloudflare Dashboard > Settings > Variables.
-# Zero-config fallback (no dashboard vars) is still memory via src/server/store.ts selection order.
+# ── Auto-visible Text variables (dashboard me Add ki zarurat nahi — bas Value bharo) ──
+DB_TARGET = "postgres"
+SHER_DB = "postgres"
+STORE_TARGET = "b2"
 SHER_INVITE_ONLY = "1"
 SHER_RATE_LIMIT = "on"
+OPERATOR_EMAIL = "SudhirK926@gmail.com"
+ADMIN_EMAIL = ""
+ADMIN_PASSWORD = ""
+VAPID_SUBJECT = "mailto:SudhirK926@gmail.com"
+# ── Secrets (Encrypted) ko Dashboard > Add variable > Type Secret se bharo, yahan plain nahi ──
+# DATABASE_URL, B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+# Inko `npx wrangler secret put <NAME>` se bhi dal sakte ho — toml me value nahi likhni
 
 [observability]
 enabled = false
