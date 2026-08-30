@@ -194,7 +194,7 @@ export default function Page() {
     try {
       const c =
         r.mode === "register"
-          ? await KedClient.register({ username: r.username, passphrase: r.passphrase, device: navigator.platform || "web" })
+          ? await KedClient.register({ username: r.username, passphrase: r.passphrase, device: navigator.platform || "web", inviteCode: r.inviteCode })
           : await KedClient.unlock({ username: r.username, passphrase: r.passphrase });
       setClient(c);
       setPhase("app");
