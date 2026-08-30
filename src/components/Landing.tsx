@@ -469,19 +469,51 @@ export default function Landing({
             </p>
           </Reveal>
 
-          <Reveal delay={230}>
+          <Reveal delay={200}>
+            {/* Direct Instant Ephemeral Chat Box in Hero */}
+            <div className="mx-auto mt-8 w-full max-w-[840px] text-left">
+              <div className="panel relative overflow-hidden p-5 sm:p-6 !border-[rgba(79,240,182,.3)] bg-gradient-to-b from-[rgba(79,240,182,.07)] to-transparent shadow-[0_0_50px_rgba(79,240,182,.1)]">
+                <span className="glowline" />
+                <div className="row items-center justify-between gap-2 flex-wrap border-b border-[var(--line)] pb-3">
+                  <div>
+                    <div className="row gap-2 text-[var(--acc)]">
+                      <Icon name="spark" size={16} />
+                      <span className="text-[14px] font-bold text-[var(--ink)]">
+                        {lang === "hi" ? "🚀 तुरंत चैट शुरू करें (बिना किसी लॉगिन / पासवर्ड के)" : "🚀 1-Click Instant Chat (No Login / Zero Signup Required)"}
+                      </span>
+                    </div>
+                    <p className="mono mt-1 text-[11px] text-[var(--ink-dim)]">
+                      {lang === "hi"
+                        ? "रूम बनाएं या 6-अक्षर का कोड डालकर सीधे बातचीत शुरू करें। ऑटो-बर्न और एंड-टू-एंड एन्क्रिप्टेड।"
+                        : "Create a disposable room or enter a 6-character code to chat instantly. Auto-burns on timer."}
+                    </p>
+                  </div>
+                  <button
+                    className="btn btn-sm !bg-white/10 hover:!bg-white/20 text-xs"
+                    onClick={onEnter}
+                    title="Switch to permanent vault account"
+                  >
+                    <Icon name="lock" size={12} /> {lang === "hi" ? "या परमानेंट वॉल्ट खोलें ➔" : "Or Permanent Vault ➔"}
+                  </button>
+                </div>
+                <FreeRoomDemo onEnterGuest={onEnterGuest} />
+              </div>
+            </div>
+          </Reveal>
+
+          <Reveal delay={280}>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <button className="btn btn-primary scale-100 px-6 py-3 text-[14px] transition hover:scale-[1.03]" onClick={onEnter}>
-                <Icon name="key" size={16} /> Create your vault
+              <button className="btn btn-primary scale-100 px-6 py-2.5 text-[13.5px] transition hover:scale-[1.02]" onClick={onEnter}>
+                <Icon name="key" size={15} /> {lang === "hi" ? "परमानेंट वॉल्ट बनाएं / खोलें" : "Create or Open Permanent Vault"}
               </button>
-              <a className="btn px-6 py-3 text-[14px] transition hover:scale-[1.03]" href="/guide">
-                <Icon name="spark" size={16} /> See how it works
+              <a className="btn px-6 py-2.5 text-[13.5px] transition hover:scale-[1.02]" href="/guide">
+                <Icon name="spark" size={15} /> {lang === "hi" ? "गाइड व नियम" : "How it works & Guide"}
               </a>
             </div>
           </Reveal>
 
-          <Reveal delay={300}>
-            <div className="mx-auto mt-10 max-w-[560px] rounded-2xl border border-[var(--line)] bg-black/40 p-4 text-left shadow-2xl backdrop-blur">
+          <Reveal delay={340}>
+            <div className="mx-auto mt-8 max-w-[560px] rounded-2xl border border-[var(--line)] bg-black/40 p-4 text-left shadow-2xl backdrop-blur">
               <div className="row justify-between border-b border-[var(--line)] pb-2.5">
                 <span className="row gap-1.5 text-[var(--ink-faint)]">
                   <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b7a]" />
@@ -505,8 +537,8 @@ export default function Landing({
             </div>
           </Reveal>
 
-          <Reveal delay={360}>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <Reveal delay={380}>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               <Chip tone="good">
                 <span className="dot" /> relay: {relay?.adapter ?? "detecting…"}
               </Chip>
@@ -663,9 +695,14 @@ export default function Landing({
       {/* ---------------- footer */}
       <footer className="border-t border-[var(--line)] px-5 py-8">
         <div className="mx-auto row max-w-[1180px] flex-wrap items-center justify-between gap-3">
-          <span className="mono text-[10.5px] text-[var(--ink-faint)]">
-            SHER Messenger · MIT licensed · no analytics · no telemetry
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className="mono text-[11px] text-[var(--ink-dim)]">
+              © {new Date().getFullYear()} SHER Messenger by <b>SudhirDevOps1</b>. All rights reserved.
+            </span>
+            <span className="mono text-[10px] text-[var(--ink-faint)]">
+              Open Source under MIT License · Client-side WebCrypto · Zero Logs & Zero Telemetry
+            </span>
+          </div>
           <div className="row flex-wrap gap-1.5">
             <button className="btn btn-sm" onClick={() => setContactModal(true)}>
               {lang === "hi" ? "फीडबैक" : "Feedback"}

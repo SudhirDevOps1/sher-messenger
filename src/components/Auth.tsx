@@ -143,6 +143,18 @@ export default function Auth({
         {/* ---- form */}
         <div className="panel sheet relative overflow-hidden p-6" style={{ animationDelay: "80ms", animationFillMode: "backwards" }}>
           <span className="glowline" />
+          {onBack ? (
+            <div className="mb-4 rounded-xl border border-[rgba(56,189,248,.35)] bg-[rgba(56,189,248,.08)] p-3">
+              <div className="row items-center justify-between gap-2 flex-wrap">
+                <span className="mono text-[11px] text-[#bae6fd]">
+                  ⚡ <b>Bina password instant chat karna hai?</b>
+                </span>
+                <button type="button" className="btn btn-sm !bg-sky-500/20 !text-sky-300 hover:!bg-sky-500/30" onClick={onBack}>
+                  Instant Ephemeral Room ➔
+                </button>
+              </div>
+            </div>
+          ) : null}
           {inviteCode ? (
             <div className="row mb-4 items-start gap-2 rounded-xl border border-[rgba(79,240,182,.35)] bg-[rgba(79,240,182,.08)] p-3 text-[11.5px] text-[#a9ffe2]">
               <Icon name="key" size={14} />
