@@ -62,12 +62,15 @@ TLS: put Caddy in front (`ked.example.com { reverse_proxy localhost:3000 }`) —
 - Web stays public; `/admin` nav link is absent. The panel is unindexed and requires *both* the env gate and the bearer token. The env flag `ked.admin.env` lives in `sessionStorage` and clears on tab close.
 - To rotate admin secrets: update `ADMIN_EMAIL`/`ADMIN_PASSWORD` on the host and restart/redeploy; open tabs lose `sessionStorage` and must re-auth.
 
-### Ephemeral room codes (ops)
+### Free 30m rooms — no login (anon ephemerals) · Ephemeral room codes (ops)
 
-- **Mint:** any authenticated user may `POST /api/ked/rooms/code {maxUsers:2-30, ttlMs:60_000-30*60_000}` — default `maxUsers=5`, `ttlMs=30m` (hard cap). Returns `{roomId, code, maxUsers, expiresAt}`. Stored as `ked_room_codes` with `code_hash = SHA-256(code)`.
-- **Join:** `POST /api/ked/rooms/join {code}` checks `revokedAt`, `expiresAt`, `uses < maxUsers`, `members < maxUsers` (`src/server/store.ts:consumeRoomCode`). Already-member is idempotent.
-- **Burn:** rooms have `default_ttl <=30m`; server `shredExpired` (every `/sync`) nulls `body`; client `burnDue` (700ms) zeroes local history. After the TTL the room is tombstoned; admin may `deleteRoom` if needed (zeroes bodies, deletes membership, revokes codes).
-- **Rate limits:** `rooms` bucket applies to `rooms/code`; `admin-env` bucket applies to `admin/env-auth`.
+> **FREE without login (bina login ke):** regular users never need an account. `rooms/code`, `rooms/join`, `send`, `sync` all accept `anonId` fallback (`route.ts:278,303,322,778`). `anonId = anon_<12 hex>` is generated client-side in memory/`sessionStorage` only, never stored in `ked_users`. Only the admin panel requires `ADMIN_EMAIL`/`ADMIN_PASSWORD` + bearer.
+
+- **Mint (no auth):** any **anon or auth** user may `POST /api/ked/rooms/code {anonId?, maxUsers:2-30, ttlMs:60_000-30*60_000}` — default `maxUsers=5`, `ttlMs=30m` (hard cap `30*60_000`). `userId = auth?.user.id ?? anonId ?? auto anon_xxx` (`route.ts:282`). Returns `{roomId, code, maxUsers, expiresAt}`. Stored as `ked_room_codes` with `code_hash = SHA-256(code)` and `created_by = anon_xxx` or `u_…` — no `ked_users` row for anon.
+- **Join (no auth):** `POST /api/ked/rooms/join {code, anonId?}` → `consumeRoomCode(SHA(code), userId)` checks `revokedAt`, `expiresAt`, `uses < maxUsers`, `members < maxUsers` (`src/server/store.ts:consumeRoomCode`). Already-member is idempotent. `userId` may be `anon_xxx`.
+- **Send/Sync (no auth for anon members):** `POST /api/ked/send {roomId, header, body, anonId?}` (`route.ts:322`) checks `isMember(roomId, userId)` where `userId` may be `anon_xxx`; `GET /api/ked/sync?cursor=…&anonId=…` (`route.ts:778`) streams via the same `anonId` fallback. Persistent DMs still need Bearer.
+- **Burn:** rooms have `default_ttl <=30m`; server `shredExpired` (every `/sync`) nulls `body`; client `burnDue` (700ms) zeroes local history. After the TTL the room is tombstoned; admin may `deleteRoom` if needed (zeroes bodies, deletes membership, revokes codes). Anon rooms are purged after 30m or browser close with no `ked_users` trace.
+- **Rate limits:** `rooms` bucket applies to `rooms/code`; `admin-env` bucket applies to `admin/env-auth`; `send`/`sync` buckets apply per `anon_xxx` as well.
 
 ## Health & monitoring
 
@@ -98,7 +101,19 @@ curl -sSI "$HOST/api/ked/__crash-test" | grep -i content-type  # must be applica
 curl -fsS "$HOST/api/ked/__crash-test" | jq .error             # 500 JSON, not HTML
 # 3. admin env gate (expect 403 or 500, never 200 without valid env)
 curl -fsS -X POST "$HOST/api/ked/admin/env-auth" -H "content-type: application/json" -d '{"email":"x","pass":"y"}' | jq .
-# 4. room codes (need a real bearer — mint one via /admin after env gate)
+# 4a. FREE anon room flow — no auth (must succeed without Bearer; proves route.ts:278 anonId fallback)
+ANON="anon_$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-12)"
+CODE_JSON=$(curl -fsS -X POST "$HOST/api/ked/rooms/code" -H "content-type: application/json" -d "{\"anonId\":\"$ANON\",\"maxUsers\":5,\"ttlMs\":60000}")
+echo "$CODE_JSON" | jq .  # expect {"ok":true,"roomId":"r_…","code":"…","maxUsers":5}
+CODE=$(echo "$CODE_JSON" | jq -r .code)
+ROOM=$(echo "$CODE_JSON" | jq -r .roomId)
+# join as second anon (no auth)
+ANON2="anon_$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-12)"
+curl -fsS -X POST "$HOST/api/ked/rooms/join" -H "content-type: application/json" -d "{\"code\":\"$CODE\",\"anonId\":\"$ANON2\"}" | jq .
+# send + sync as anon (no bearer)
+curl -fsS -X POST "$HOST/api/ked/send" -H "content-type: application/json" -d "{\"roomId\":\"$ROOM\",\"header\":\"{\\\"t\\\":1}\",\"body\":\"iv.ct\",\"anonId\":\"$ANON\"}" | jq .
+curl -fsS "$HOST/api/ked/sync?cursor=0&anonId=$ANON" | jq '.items | length, .serverShredded'
+# 4b. room codes with bearer (also still works — for persistent users)
 # curl -H "authorization: Bearer $ADMIN_TOKEN" -d '{"maxUsers":5,"ttlMs":60000}' -H "content-type: application/json" "$HOST/api/ked/rooms/code" | jq .
 # 5. headers (see SECURITY-HEADERS.md)
 curl -sSI "$HOST" | tr -d '\r' | grep -Ei 'content-security-policy|strict-transport-security|x-content|referrer|permissions|cross-origin'

@@ -37,28 +37,36 @@ sender tab                        relay (blind)                     receiver tab
                                                                    11. open() → mk destroyed immediately
 ```
 
-### Data flow: room code (ephemeral group, 30m)
+### Data flow: room code (ephemeral group, 30m — FREE, no login)
 
 ```
-creator tab                              relay                          joiner tab
-─────────                                ─────                          ──────────
-POST /api/ked/rooms/code {maxUsers 2-30, ttlMs 1-30m}
-                         ──► ensureRoom(r_<id>, type=group, defaultTtl=ttlMs)
-                             joinRoom(creator)
-                             INSERT ked_room_codes {codeHash=SHA256(6-char), roomId, maxUsers, expiresAt=now+ttlMs, uses=1}
-                         ◄── {roomId, code: "a1b2c3", maxUsers, expiresAt}
+creator tab (anon or auth)              relay                          joiner tab (anon or auth)
+──────────────────────────               ─────                           ─────────────────────────
+# anonId = anon_<12 hex>, generated client-side in memory/sessionStorage only
+# never in ked_users; if Bearer present, auth userId wins over anonId
+POST /api/ked/rooms/code {anonId maxUsers 2-30, ttlMs 1-30m}  — no bearer needed
+                          ──► userId = auth.user.id ?? anonId ?? auto anon_xxx
+                              ensureRoom(r_<id>, type=group, defaultTtl=ttlMs)
+                              joinRoom(userId)   # ked_room_members holds anon_xxx directly
+                              INSERT ked_room_codes {codeHash=SHA256(6-char), roomId, createdBy=userId, maxUsers, expiresAt=now+ttlMs, uses=1}
+                          ◄── {roomId, code: "a1b2c3", maxUsers, expiresAt}
+                          # codeHash only; plaintext code shown once
 
 share code o.o.b. (link, QR, voice)
 
-                                         POST /api/ked/rooms/join {code}
-                                         ──► findRoomCodeByHash(SHA(code))
-                                             checks: !revoked, !expired, uses < maxUsers, members < maxUsers
-                                             UPDATE uses+=1; joinRoom(joiner)
-                                         ◄── {roomId}
+                                          POST /api/ked/rooms/join {code, anonId} — no bearer needed
+                                          ──► userId = auth.user.id ?? anonId ?? auto anon_xxx
+                                              findRoomCodeByHash(SHA(code))
+                                              checks: !revoked, !expired, uses < maxUsers, members < maxUsers
+                                              UPDATE uses+=1; joinRoom(userId)
+                                          ◄── {roomId}
 
-both members now sync via GET /sync and speak via POST /send (same blind flow above)
-after ttlMs: server shredExpired nulls body; client burnDue (700ms) zeroes local history
+both members now sync via GET /sync?anonId=… and speak via POST /send {…,anonId} (same blind flow above; send/sync accept anonId fallback, route.ts:322/778)
+after ttlMs (hard cap 30m): server shredExpired nulls body; client burnDue (700ms) zeroes local history
+close tab → anonId discarded, local history wiped; relay rows purged at expiry — no ked_users row ever existed
 ```
+
+> **Anon vs persistent rooms:** anon 30m rooms live only in `ked_room_codes` + `ked_room_members` + `ked_rooms` + `ked_messages` with `anon_xxx` ids. No `ked_users` row, no vault, no handle/passphrase, no contact graph. Persistent DM/group rooms still require `register`/`login` (handle+passphrase), X3DH-lite + Double Ratchet sessions, and vault-encrypted history — they are long-lived, E2EE, and support safety-number verification. Anon rooms reuse the same blind relay + shred/burn path but are 30m capped, non-E2EE-Double-Ratchet (plaintext routed as anon ciphertext blobs) and auto-delete on browser close.
 
 ## Key lifecycle
 
@@ -81,16 +89,19 @@ after ttlMs: server shredExpired nulls body; client burnDue (700ms) zeroes local
 
 ### Public web, hidden admin
 
-- Web is public (no auth for `/`). `/admin` is never linked in nav; `src/app/admin/page.tsx` requires `sessionStorage ked.admin.env == "1"` (set only after `POST /api/ked/admin/env-auth` with both `ADMIN_EMAIL` + `ADMIN_PASSWORD` from env). Backend double-checks `isAdmin` on every `admin/*` handler (`route.ts:522`). Env vars are read via `process.env.ADMIN_EMAIL ?? SHER_ADMIN_EMAIL` and `ADMIN_PASSWORD ?? SHER_ADMIN_PASSWORD` (`route.ts:510`).
+- Web is public (no auth for `/`); **free 30m anon rooms need no login at all** (next section). `/admin` is never linked in nav; `src/app/admin/page.tsx` requires `sessionStorage ked.admin.env == "1"` (set only after `POST /api/ked/admin/env-auth` with both `ADMIN_EMAIL` + `ADMIN_PASSWORD` from env). Backend double-checks `isAdmin` on every `admin/*` handler (`route.ts:522`). Env vars are read via `process.env.ADMIN_EMAIL ?? SHER_ADMIN_EMAIL` and `ADMIN_PASSWORD ?? SHER_ADMIN_PASSWORD` (`route.ts:510`). **Regular users never need an account** — admin login is the only authenticated surface.
 
-### Public room codes (ephemeral, 30m)
+### Free 30m rooms — no login (public ephemeral rooms, `anonId` flow)
 
-**Purpose:** frictionless group creation without pre-sharing DMs — creator sets `maxUsers` 2-30 and `ttlMs` 1-30m (cap `30*60_000`).
+**Purpose:** frictionless group creation without pre-sharing DMs, **FREE without login (bina login ke)** — creator sets `maxUsers` 2-30 and `ttlMs` 1-30m (cap `30*60_000`). No handle/passphrase, no `ked_users` row. `anonId` (`anon_<12 hex>`) is generated client-side in memory/`sessionStorage` only and passed as `anonId` in each request; server falls back to auto-generating `anon_xxx` if absent (`route.ts:282/312`). Auth still works — if Bearer present, `userId = me.user.id`, else `anonId`.
 
-- `POST /api/ked/rooms/code` (`route.ts:278`) — auth required, rate-limited (`rooms`). Validates `maxUsers`/`ttlMs`, creates `r_<16>` group room with `defaultTtl = ttlMs`, `joinRoom(creator)`, mints `6`-char `code` (`randomUUID` slice), stores `ked_room_codes {id: rc_…, codeHash: SHA-256(code), roomId, createdBy, maxUsers, uses:1, expiresAt: now+ttlMs}`. Returns `{roomId, code, maxUsers, expiresAt}`.
-- `POST /api/ked/rooms/join` (`route.ts:307`) — auth required, validates code, calls `store.consumeRoomCode(SHA(code), userId)` which checks `revokedAt`, `expiresAt`, `uses < maxUsers`, and `roomMembers < maxUsers` before `joinRoom`. Returns `{roomId}`.
+- `POST /api/ked/rooms/code` (`route.ts:278`) — **no auth required**, rate-limited (`rooms`). Accepts `{anonId?, maxUsers, ttlMs, nameEnc}`; derives `userId = auth?.user.id ?? anonId ?? auto`. Validates `maxUsers`/`ttlMs`, creates `r_<16>` group room with `defaultTtl = ttlMs`, `joinRoom(userId)`, mints `6`-char `code` (`randomUUID` slice), stores `ked_room_codes {id: rc_…, codeHash: SHA-256(code), roomId, createdBy: userId, maxUsers, uses:1, expiresAt: now+ttlMs}` (no FK to `ked_users`). Returns `{roomId, code, maxUsers, expiresAt}`.
+- `POST /api/ked/rooms/join` (`route.ts:303`) — **no auth required**, `{code, anonId}` → `store.consumeRoomCode(SHA(code), userId)` which checks `revokedAt`, `expiresAt`, `uses < maxUsers`, and `roomMembers < maxUsers` before `joinRoom(userId)`. Returns `{roomId}`. Idempotent if already member.
+- `POST /api/ked/send` (`route.ts:322`) and `GET /api/ked/sync` (`route.ts:778`) — also accept `anonId` fallback (`userId = auth?.user.id ?? anonId`) so anon members can send/sync without a `ked_users` row. Room membership is still enforced via `ked_room_members` with `anon_xxx` ids.
 
-Both paths use `src/server/store.ts` `RoomCodeRow` + `SqlStore`/`MemoryStore`. Rate buckets prevent enumeration.
+**AnonId handling:** client generates `anon_<random 12>` on first load (e.g. in `sessionStorage`), reuses it for the tab lifetime, discards on `beforeunload`. Nothing is written to `ked_users`; the relay only knows opaque `anon_xxx` strings in `ked_room_members`/`ked_messages.sender_id`/`ked_rooms.created_by`. **30m hard cap** (`Math.min(ttl, 30*60_000)`, `route.ts:287`) applies to anon and auth alike.
+
+Both paths use `src/server/store.ts` `RoomCodeRow` + `SqlStore`/`MemoryStore`. Rate buckets prevent enumeration. Persistent DM/group rooms (with contacts + Double Ratchet) still require auth; anon rooms are ephemeral-only and auto-burn/auto-delete.
 
 ### Ephemeral rooms & 30m auto-burn
 
@@ -104,15 +115,18 @@ After `30m`, **history is dead on both sides** — `body` is gone from the relay
 
 ```
 ked_users ─┬─< ked_auth_sessions
-           ├─< ked_room_members >─ ked_rooms ─< ked_messages
+           ├─< ked_room_members >─ ked_rooms ─< ked_messages   # persistent rooms: members are u_… (FK to ked_users)
            ├─< ked_devices
            ├─< ked_audit
 ked_invites    (code_hash, role, max_uses, uses, expires_at, revoked_at)
-ked_room_codes (code_hash, room_id, created_by, max_users, uses, expires_at, revoked_at) — 6-char ephemeral codes, SHA-256 hashed
+ked_room_codes (code_hash, room_id, created_by, max_users, uses, expires_at, revoked_at) — 6-char ephemeral codes, SHA-256 hashed; created_by may be anon_xxx (no FK)
+ked_room_members — for anon 30m rooms, member id is anon_xxx (no ked_users row); for persistent rooms, member id is u_… 
 ked_notices    (active flag; plaintext BY DESIGN, flagged "not E2EE")
 ked_rate       (token buckets)
 ked_attachments (id, room_id, data=ciphertext, expires_at, destroyed_at)
 ```
+
+> **Anon rooms vs ked_users:** anon 30m rooms never create a `ked_users` row. Only `ked_room_codes` + `ked_rooms` + `ked_room_members` (with `anon_xxx`) + `ked_messages` (with `senderId = anon_xxx`) exist. Persistent DM/group rooms always join via `u_…` and have full Double Ratchet + vault history.
 
 Every table is created with `CREATE TABLE IF NOT EXISTS` on first boot; the same DDL exists in a
 Postgres and a SQLite dialect, plus a Drizzle schema (`src/db/schema.ts`) for `drizzle-kit push`.

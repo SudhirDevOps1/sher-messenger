@@ -69,31 +69,43 @@ flowchart LR
 
 ### Public web, hidden admin (extreme privacy)
 
-The web app is **public** — anyone can open `/`. `/admin` is **never linked** from the UI and is gated by two factors:
+The web app is **public** — anyone can open `/` and use **free 30m ephemeral rooms without any login** (see next section). `/admin` is **never linked** from the UI and is the **only** place that requires login — it is gated by two factors:
 
 1. **Env gate** — `ADMIN_EMAIL` + `ADMIN_PASSWORD` (or `SHER_ADMIN_EMAIL` / `SHER_ADMIN_PASSWORD`) set as encrypted Secrets on Cloudflare / Vercel / Render. Nothing is exposed to the browser. The client must pass `POST /api/ked/admin/env-auth` (`src/app/api/ked/[...slug]/route.ts:464`) — rate-limited via `admin-env` bucket — before the bearer step appears. Without both env vars the endpoint returns `500 admin env not configured`.
 2. **Bearer gate** — a valid admin invite bearer token (`Authorization: Bearer <token>`) whose role is `admin`. All `/api/ked/admin/*` routes require it (`src/app/api/ked/[...slug]/route.ts:522`). Tokens are stored as `SHA-256` only.
 
-UI logic: `src/app/admin/page.tsx` keeps `ked.admin.env` in `sessionStorage` (tab-only); closing the tab clears the env-unlocked flag and forces re-auth. See `SECURITY.md` and `RUNBOOK.md` for operator setup.
+UI logic: `src/app/admin/page.tsx` keeps `ked.admin.env` in `sessionStorage` (tab-only); closing the tab clears the env-unlocked flag and forces re-auth. **Regular users never need an account or login** — 30m anon rooms are completely free and anonymous. See `SECURITY.md` and `RUNBOOK.md` for operator setup.
 
-### Public room codes (ephemeral, 30m)
+### Free 30m rooms — no login (bina login ke) · ephemeral, auto-burn
 
-Create an instant group room and share a 6-char code — no contact import, no pre-existing DM:
+Anyone can create an instant group room and share a 6-char code — **no account, no handle, no passphrase, FREE without login**. Only the admin panel requires `ADMIN_EMAIL`/`ADMIN_PASSWORD` + bearer; regular users never log in.
+
+**How `anonId` works:** the client generates `anonId = anon_<12 hex>` (e.g. `anon_a1b2c3d4e5f6`) in memory / `sessionStorage` only — never stored in `ked_users`, never persisted to `localStorage`, never tied to a handle. It is sent as `anonId` in `rooms/code`, `rooms/join`, `send`, `sync` and is used as `userId`/`senderId`/`createdBy` for that ephemeral session. Close the tab → `anonId` + local history gone. If a Bearer token is present, auth wins and `anonId` is ignored.
 
 ```bash
-# as any authenticated user
-curl -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
-  -d '{"maxUsers":5,"ttlMs":1800000}' localhost:3000/api/ked/rooms/code
+# FREE — no bearer, no login (create a 5-person room, 30m TTL)
+curl -H "content-type: application/json" \
+  -d '{"anonId":"anon_abc123def456","maxUsers":5,"ttlMs":1800000}' \
+  localhost:3000/api/ked/rooms/code
 # → {"ok":true,"roomId":"r_…","code":"a1b2c3","maxUsers":5,"expiresAt":"…"}
-# join with:
-curl -H "authorization: Bearer $TOKEN" -H "content-type: application/json" \
-  -d '{"code":"a1b2c3"}' localhost:3000/api/ked/rooms/join
+# join as guest (no login):
+curl -H "content-type: application/json" \
+  -d '{"code":"a1b2c3","anonId":"anon_xyz987uvw654"}' \
+  localhost:3000/api/ked/rooms/join
+# send + sync also accept anonId fallback (no bearer):
+curl -H "content-type: application/json" \
+  -d '{"roomId":"r_…","header":"…","body":"iv.ct","anonId":"anon_abc123def456"}' \
+  localhost:3000/api/ked/send
+curl "localhost:3000/api/ked/sync?cursor=0&anonId=anon_abc123def456"
+# If you ARE logged in, just send Bearer as before — anonId is ignored when auth succeeds.
+# curl -H "authorization: Bearer $TOKEN" -d '{"maxUsers":5}' localhost:3000/api/ked/rooms/code  # also works
 ```
 
-- `POST /api/ked/rooms/code` — creator sets `maxUsers` (2-30, default 5) and `ttlMs` (60 000-30*60 000, default 30m, **hard cap 30m**). Mints a 6-char code into `ked_room_codes` (`src/server/store.ts`) and creates a `group` room whose `defaultTtl` = `ttlMs`.
-- `POST /api/ked/rooms/join` — consumes the code, checks `uses < maxUsers` and `expiresAt`, then `joinRoom`. Already-member re-join is idempotent. Rate-limited via the `rooms` bucket.
+- `POST /api/ked/rooms/code` (`src/app/api/ked/[...slug]/route.ts:278`) — **no auth required**; accepts `{anonId, maxUsers 2-30, ttlMs 1-30m}` (hard cap **30m**). If `Authorization: Bearer` is present the logged-in user is used; otherwise `anonId` (client-generated `anon_xxx`, or auto-generated server-side `anon_<12>`) becomes `userId`/`createdBy`. Creates `group` room with `defaultTtl=ttlMs`, mints 6-char code → `ked_room_codes` (`SHA-256(code)`), `uses=1`, `expiresAt=now+ttlMs`. Rate-limited via `rooms` bucket.
+- `POST /api/ked/rooms/join` (`src/app/api/ked/[...slug]/route.ts:303`) — **no auth required**; `{code, anonId}` → `consumeRoomCode(SHA(code), userId)` checks `revoked/expired/uses<maxUsers/members<maxUsers`, then `joinRoom`. Idempotent if already member.
+- `POST /api/ked/send` (`src/app/api/ked/[...slug]/route.ts:322`) and `GET /api/ked/sync` (`src/app/api/ked/[...slug]/route.ts:778`) — also accept `anonId` fallback so anon members can chat without ever creating a `ked_users` row.
 
-Creator = first member; sharing the code = entering. Rooms auto-burn after `ttlMs` (see 30m auto-burn below). ER + flow details: `ARCHITECTURE.md`.
+Creator = first member; sharing the code = entering. Rooms auto-burn after `ttlMs` and auto-delete on browser close (see 30m auto-burn below). For **persistent** DM/group rooms with contacts, history, and E2EE Double Ratchet, an account (handle+passphrase) is still required — anon rooms are ephemeral-only, 30m max. ER + flow details: `ARCHITECTURE.md`.
 
 ### 30m auto-burn ephemerals
 

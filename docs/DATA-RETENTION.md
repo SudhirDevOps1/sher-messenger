@@ -6,7 +6,8 @@
 | Message tombstone (`seq`, `kind`, `size`, `created_at`) | relay DB | until account deletion | account deletion / admin purge | row kept for ordering, content gone |
 | Attachment ciphertext | relay row (today) or R2/B2 | 7 days default, configurable per send (`ttlMs`) | TTL sweep on every `/sync` | blob emptied, `destroyed_at` set |
 | Ephemeral code-room messages (`ked_messages` with `defaultTtl <=30m`) | relay DB + local history | **≤30m hard cap** (`30*60_000`) | `shredExpired()` on every `/sync` + client `burnDue()` every 700ms | server: `body=NULL`; client: `HistMsg` zeroed locally; no recovery |
-| Room codes (`ked_room_codes`: `code_hash`, `max_users`, `uses`, `expires_at`) | relay DB | until `expiresAt` (≤30m) or full / revoked | TTL, `revokeRoomCode`, `deleteRoom`, or room auto-delete | `revoked_at` set; only `code_hash` (SHA-256 of 6-char) stored, never plaintext |
+| Room codes (`ked_room_codes`: `code_hash`, `max_users`, `uses`, `expires_at`) | relay DB | until `expiresAt` (≤30m) or full / revoked | TTL, `revokeRoomCode`, `deleteRoom`, or room auto-delete | `revoked_at` set; only `code_hash` (SHA-256 of 6-char) stored, never plaintext; `created_by` may be `anon_xxx` (no `ked_users` FK) |
+| Anon 30m rooms — **FREE without login** (`anon_xxx` ids) | relay DB (`ked_room_codes` + `ked_room_members` + `ked_rooms` + `ked_messages` with `anon_xxx`) + browser memory/`sessionStorage` only | **≤30m** or until browser close | `expiresAt` shred (`shredExpired`/`burnDue`), `beforeunload` wipe, room auto-delete | **no `ked_users` row**; only ephemeral `ked_room_codes`/`ked_room_members` with `anon_xxx` (`anonId` generated client-side, stored in memory/session only, never in `ked_users`); purged at `expiresAt` or on browser close — a new tab = new `anon_xxx` |
 | Vault mirror (`vault_blob`) | `ked_users` | until overwritten or account deleted | panic wipe, account deletion | overwritten with `''` + salt blanked |
 | Local vault envelope (`ked.vault.v1.<username>` in `localStorage`) | browser `localStorage` | until Clear cache / Wipe / browser clear | `ls.del()` + `ss.clear()` + panic wipe | envelope `{n,c,salt,at}` where `c = AES-GCM(vaultKey, JSON.stringify(VaultData), utf8(username))`, `vaultKey = PBKDF2(passphrase, 16B random salt, 750k)` (`src/lib/client.ts`); plaintext on relay is only ciphertext+opaque ids |
 | Tab resume key (`ked.resume.v1` in `sessionStorage`) | browser `sessionStorage` (tab-only) | tab lifetime | `beforeunload` → `sessionStorage.clear()`, panic wipe | raw `vaultKey` b64 dies with tab; next open requires passphrase |
@@ -35,18 +36,19 @@ each body was derived from a hash chain and destroyed immediately after use, on 
 taken a millisecond after delivery therefore contains ciphertext whose key no longer exists anywhere in the
 universe. `body = NULL` is housekeeping, not the security boundary.
 
-## 30m auto-burn ephemerals (code-rooms)
+## Free 30m rooms — no login (anon ephemerals) & 30m auto-burn (code-rooms)
 
-- **Creation:** `POST /api/ked/rooms/code` sets `ked_rooms.default_ttl = ttlMs` where `60_000 <= ttlMs <= 30*60_000` (hard cap in `src/app/api/ked/[...slug]/route.ts:285`). `ked_room_codes` row carries the same `expiresAt = now + ttlMs`.
+- **Free without login (bina login ke):** `POST /api/ked/rooms/code` (`route.ts:278`) and `rooms/join` (`route.ts:303`) accept `{anonId, …}` with **no Bearer required** (`userId = auth?.user.id ?? anonId ?? auto anon_xxx`). `send` (`route.ts:322`) + `sync` (`route.ts:778`) accept the same fallback. `anonId` (`anon_<12 hex>`) is generated client-side in memory/`sessionStorage` only, never in `ked_users`; the relay only stores opaque `anon_xxx` in `ked_room_codes.created_by`, `ked_room_members`, and `ked_messages.sender_id`. Close tab → `anonId` discarded.
+- **Creation:** `POST /api/ked/rooms/code` sets `ked_rooms.default_ttl = ttlMs` where `60_000 <= ttlMs <= 30*60_000` (hard cap in `src/app/api/ked/[...slug]/route.ts:285`). `ked_room_codes` row carries the same `expiresAt = now + ttlMs`. For anon rooms, **no `ked_users` row** is created — only `ked_room_codes` + `ked_room_members` (`anon_xxx`) + `ked_rooms`.
 - **Server burn:** every `GET /api/ked/sync` calls `store.shredExpired()` which nulls `body` / sets `destroyedAt` for all `expires_at < now`. Client receives `destroyedAt` and drops the body.
 - **Client burn:** `KedClient.burnDue()` runs every **700 ms** (`src/lib/client.ts`) and locally destroys `HistMsg` entries with `expiresAt <= now` (`destroyed=true, text="", attachment=null`), then `persist()`s the vault.
-- **Result:** after `30m`, history is dead on **both** sides — no export, no admin purge reversal. The room's `ked_room_codes` entry is expired/revoked and `deleteRoom` will zero the whole room on next cleanup.
+- **Result:** after `30m`, history is dead on **both** sides — no export, no admin purge reversal. The room's `ked_room_codes` entry is expired/revoked and `deleteRoom` will zero the whole room on next cleanup. **Anon rooms leave no persistent identity:** after `30m` or browser close, only tombstoned `anon_xxx` rows remain until purged; a new tab generates a new `anon_xxx` with no link to the prior one. Persistent DM/group rooms still require a `ked_users` account and Double Ratchet sessions.
 
 ## Auto-delete on browser close
 
-- `src/app/page.tsx` (`beforeunload`) does `sessionStorage.clear()` → kills `ked.resume.v1` (tab vault key) and `ked.admin.env`. For ephemeral rooms (`ttl <= 30*60_000`) it also sets `client.data.history[roomId] = []` locally.
+- `src/app/page.tsx` (`beforeunload`) does `sessionStorage.clear()` → kills `ked.resume.v1` (tab vault key), `ked.admin.env`, and any `anonId` (`anon_xxx`). For ephemeral rooms (`ttl <= 30*60_000`) — including **anon 30m rooms with no login** — it also sets `client.data.history[roomId] = []` locally and discards the in-memory `anonId`; the next tab gets a fresh `anon_xxx`.
 - `globals.css` applies `.watermark` (`repeating-linear-gradient(-30deg)` at 4% opacity) and `.secret` (`filter: blur(7px)`) while unfocused, so the back/forward cache shows no plaintext.
-- **Next open requires the passphrase** to re-derive `vaultKey = PBKDF2(passphrase, salt, 750k)` and `openAead` the `ked.vault.v1.<username>` envelope. No cookie or disk key survives the close.
+- **Next open requires the passphrase** to re-derive `vaultKey = PBKDF2(passphrase, salt, 750k)` and `openAead` the `ked.vault.v1.<username>` envelope. No cookie or disk key survives the close. **Anon users have nothing to re-derive** — their `anonId` lived only in `sessionStorage`/memory and is gone; anonymous rooms are not recoverable after close (only the 30m relay tombstones remain until `shredExpired`).
 
 ## Local vault at rest & Clear cache / Wipe
 

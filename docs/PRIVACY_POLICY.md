@@ -30,7 +30,7 @@ never reaches this server. It is encrypted in your browser before it is sent, an
 | --- | --- | --- |
 | Handle (username) | so peers can find you and the relay can route | until account deletion |
 | Opaque user id (`u_…`) | membership checks | until account deletion |
-| Room id, sender id | routing + 403 enforcement | until account deletion |
+| Room id, sender id (`u_…` or `anon_xxx`) | routing + 403 enforcement; anon rooms use `anon_xxx` with no `ked_users` row | persistent: until account deletion; anon: ≤30m then purged |
 | Byte size, `createdAt`, `destroyedAt` | ordering, TTL sweeps | until account deletion |
 | Role (`member`/`admin`), blocked flag | RBAC, abuse control | until account deletion |
 | SHA-256(bearer token), PBKDF2 verifier, device label, truncated IP hash | auth | 30 days or until revoked |
@@ -38,7 +38,10 @@ never reaches this server. It is encrypted in your browser before it is sent, an
 | Audit rows (event class + opaque id, e.g. `msg.shredded`) | security visibility, **no content** | rolling 30 days |
 | Invite `code_hash`, uses, expiry, role | invite-only signup | until revoked |
 | Room code `code_hash` (6-char, `ked_room_codes`), `maxUsers`, uses, expiry | ephemeral group join without pre-sharing DMs; codes are SHA-256 hashed, never plaintext | until expiry (≤30m) or consumed / revoked; `expiresAt` enforces hard cap |
+| Anon room codes — `ked_room_codes` with `createdBy = anon_xxx`, `ked_room_members` with `anon_xxx` ids | **FREE without login (bina login ke)** — 30m ephemeral rooms; `anonId` (`anon_<12>`) generated client-side in memory/session only, never in `ked_users`, never persisted | ≤30m; auto-purged on `expiresAt` or browser close; no persistent identity |
 | System notice text | operational broadcast — **explicitly not E2EE** | until cleared |
+
+> **Anon users have no persistent identity:** an `anon_xxx` id lives only in `ked_room_codes`/`ked_room_members`/`ked_messages` + the browser's memory/`sessionStorage` for the tab lifetime. No `ked_users` row, no handle, no passphrase, no vault, no PBKDF2 verifier, no contact graph, no device record. Closing the tab discards `anonId` and local history; after `ttlMs` (≤30m) the relay shreds bodies and revokes codes. A new tab = a new `anon_xxx` with no link to the previous one.
 
 ### (d) PLATFORM LOGS (not controlled by us)
 | Host | They log | Their policy |
@@ -79,14 +82,16 @@ Retention detail per data type: see **DATA-RETENTION.md**. Threat model and resi
 
 When you close or reload the tab, `src/app/page.tsx` `beforeunload` handler runs: `sessionStorage.clear()` (kills `ked.resume.v1` and `ked.admin.env`), and ephemeral room histories (`ttl <= 30m`) are wiped locally (`client.data.history[roomId] = []`). The page also shows a faint `repeating-linear-gradient` watermark (`src/app/globals.css:.watermark`) and blurs content while unfocused (`secret` class) so the back/forward cache reveals no plaintext. **Next open requires the full passphrase** — there is no cookie-based auto-login.
 
-## 30m auto-burn ephemerals (code-rooms)
+## Free 30m rooms — no login (bina login ke) & 30m auto-burn ephemerals (code-rooms)
+
+Anonymous users create ephemeral rooms **without any login**: `POST /api/ked/rooms/code {anonId, maxUsers, ttlMs}` and `POST /api/ked/rooms/join {code, anonId}` accept an `anonId` (`anon_<12>`, client-generated in memory/session, never in `ked_users`) as fallback when no `Authorization: Bearer` is present (`src/app/api/ked/[...slug]/route.ts:278,303`). `send` (`route.ts:322`) and `sync` (`route.ts:778`) accept the same fallback. Closing the tab discards `anonId` and wipes local history for that room.
 
 Rooms created via `POST /api/ked/rooms/code` carry `defaultTtl <= 30m` (server enforces `Math.min(ttl, 30*60_000)` in `src/app/api/ked/[...slug]/route.ts:285`). After that window:
 
 - Server: `store.shredExpired()` (on every `GET /sync`) sets `body=NULL, destroyedAt=now` on expired rows; subsequent `sync` returns `destroyedAt` and no body.
 - Client: `KedClient.burnDue()` runs every **700ms** (`src/lib/client.ts`) and locally zeroes `HistMsg` entries whose `expiresAt <= now`. The ledger records `message.burned`.
 
-After 30m, history is dead on **both** sides — no admin can recover it, because the per-message key was already destroyed.
+After 30m, history is dead on **both** sides — no admin can recover it, because the per-message key was already destroyed. **Anon users leave no persistent trace:** no `ked_users` row, only ephemeral `ked_room_codes`/`ked_room_members` with `anon_xxx` that expire with the room.
 
 ## Screenshot / download friction (not a guarantee)
 
