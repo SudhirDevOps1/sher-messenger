@@ -668,13 +668,26 @@ export class SqlStore implements Store {
       await this.run(`DELETE FROM ked_messages WHERE (expires_at IS NOT NULL AND expires_at < $1) OR (destroyed_at IS NOT NULL AND destroyed_at < $2)`, [now, tenMinAgo]);
     }
 
-    // 3. Hard-delete expired auth sessions & revoked sessions
-    await this.run(`DELETE FROM ked_auth_sessions WHERE expires_at < $1 OR revoked_at IS NOT NULL`, [now]);
+    // 3. Hard-delete expired ephemeral room codes and corresponding rooms
+    const expiredCodes = await this.run(`SELECT room_id FROM ked_room_codes WHERE (expires_at IS NOT NULL AND expires_at < $1) OR revoked_at IS NOT NULL`, [now]);
+    for (const ec of expiredCodes) {
+      if (ec.room_id) {
+        const rid = String(ec.room_id);
+        await this.run(`DELETE FROM ked_messages WHERE room_id=$1`, [rid]);
+        await this.run(`DELETE FROM ked_attachments WHERE room_id=$1`, [rid]);
+        await this.run(`DELETE FROM ked_room_members WHERE room_id=$1`, [rid]);
+        await this.run(`DELETE FROM ked_rooms WHERE id=$1`, [rid]);
+      }
+    }
+    await this.run(`DELETE FROM ked_room_codes WHERE (expires_at IS NOT NULL AND expires_at < $1) OR revoked_at IS NOT NULL`, [now]);
 
-    // 4. Hard-delete stale rate limit buckets older than 1 hour
+    // 4. Hard-delete expired auth sessions & revoked sessions
+    await this.run(`DELETE FROM ked_auth_sessions WHERE (expires_at IS NOT NULL AND expires_at < $1) OR revoked_at IS NOT NULL`, [now]);
+
+    // 5. Hard-delete stale rate limit buckets older than 1 hour
     await this.run(`DELETE FROM ked_rate WHERE window_start < $1`, [Date.now() - 3600_000]);
 
-    // 5. Hard-delete old audit log entries older than 7 days
+    // 6. Hard-delete old audit log entries older than 7 days
     await this.run(`DELETE FROM ked_audit WHERE created_at < $1`, [sevenDaysAgo]);
 
     return due.length;
@@ -800,19 +813,22 @@ export class SqlStore implements Store {
     await this.run(`UPDATE ked_room_codes SET revoked_at=$2 WHERE id=$1`, [id, new Date().toISOString()]);
   }
   async deleteRoom(roomId: string): Promise<void> {
-    await this.run(`UPDATE ked_messages SET body=NULL, destroyed_at=$2 WHERE room_id=$1`, [roomId, new Date().toISOString()]);
+    await this.run(`DELETE FROM ked_messages WHERE room_id=$1`, [roomId]);
+    await this.run(`DELETE FROM ked_attachments WHERE room_id=$1`, [roomId]);
     await this.run(`DELETE FROM ked_room_members WHERE room_id=$1`, [roomId]);
+    await this.run(`DELETE FROM ked_room_codes WHERE room_id=$1`, [roomId]);
     await this.run(`DELETE FROM ked_rooms WHERE id=$1`, [roomId]);
-    await this.run(`UPDATE ked_room_codes SET revoked_at=$2 WHERE room_id=$1`, [roomId, new Date().toISOString()]);
   }
 
   async listActiveRooms(limit: number): Promise<{ id: string; type: string; createdAt: string; defaultTtl: number | null; membersCount: number; expiresAt: string | null; uses: number; maxUsers: number }[]> {
+    const now = new Date().toISOString();
     const rooms = await this.run(
       `SELECT r.id, r.type, r.created_at, r.default_ttl,
               (SELECT COUNT(*) FROM ked_room_members m WHERE m.room_id = r.id) as members_count,
               rc.expires_at, rc.uses, rc.max_users
        FROM ked_rooms r
-       LEFT JOIN ked_room_codes rc ON rc.room_id = r.id AND rc.revoked_at IS NULL
+       LEFT JOIN ked_room_codes rc ON rc.room_id = r.id
+       WHERE rc.id IS NULL OR (rc.expires_at > '${now}' AND rc.revoked_at IS NULL)
        ORDER BY r.created_at DESC LIMIT ${Math.max(1, Math.min(100, limit))}`
     );
     return rooms.map((r) => ({
@@ -849,25 +865,24 @@ export class SqlStore implements Store {
     const rooms = await this.run(`SELECT room_id FROM ked_room_members WHERE user_id=$1`, [id]);
     for (const r of rooms) {
       const rid = String(r.room_id);
-      await this.run(`UPDATE ked_messages SET body=NULL, destroyed_at=$2 WHERE room_id=$1`, [rid, new Date().toISOString()]);
-      await this.run(`DELETE FROM ked_room_members WHERE room_id=$1`, [rid]);
-      await this.run(`DELETE FROM ked_rooms WHERE id=$1`, [rid]);
+      await this.deleteRoom(rid);
     }
-    await this.run(`UPDATE ked_messages SET body=NULL, destroyed_at=$2 WHERE sender_id=$1`, [id, new Date().toISOString()]);
-    await this.run(`UPDATE ked_attachments SET data='', destroyed_at=$2 WHERE uploader_id=$1`, [id, new Date().toISOString()]);
+    await this.run(`DELETE FROM ked_messages WHERE sender_id=$1`, [id]);
+    await this.run(`DELETE FROM ked_attachments WHERE uploader_id=$1`, [id]);
     await this.run(`DELETE FROM ked_auth_sessions WHERE user_id=$1`, [id]);
     await this.run(`UPDATE ked_users SET vault_blob='', vault_salt='', ik_pub='', spk_pub='', spk_sig='[]', opk_pubs='[]', blocked=1, note='purged' WHERE id=$1`, [id]);
   }
 
   async counts(): Promise<{ users: number; blocked: number; rooms: number; ciphertextRows: number; invites: number; activeSessions: number }> {
     const one = async (sql: string) => Number((await this.run(sql))[0]?.c ?? 0);
+    const now = new Date().toISOString();
     return {
       users: await one(`SELECT COUNT(*) AS c FROM ked_users`),
       blocked: await one(`SELECT COUNT(*) AS c FROM ked_users WHERE blocked=1`),
-      rooms: await one(`SELECT COUNT(*) AS c FROM ked_rooms`),
-      ciphertextRows: await one(`SELECT COUNT(*) AS c FROM ked_messages`),
-      invites: await one(`SELECT COUNT(*) AS c FROM ked_invites WHERE revoked_at IS NULL`),
-      activeSessions: await one(`SELECT COUNT(*) AS c FROM ked_auth_sessions WHERE revoked_at IS NULL`),
+      rooms: await one(`SELECT COUNT(*) AS c FROM ked_rooms r LEFT JOIN ked_room_codes rc ON rc.room_id = r.id WHERE rc.id IS NULL OR (rc.expires_at > '${now}' AND rc.revoked_at IS NULL)`),
+      ciphertextRows: await one(`SELECT COUNT(*) AS c FROM ked_messages WHERE (expires_at IS NULL OR expires_at > '${now}') AND destroyed_at IS NULL AND body IS NOT NULL AND body != ''`),
+      invites: await one(`SELECT COUNT(*) AS c FROM ked_invites WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > '${now}')`),
+      activeSessions: await one(`SELECT COUNT(*) AS c FROM ked_auth_sessions WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > '${now}')`),
     };
   }
 
@@ -1066,9 +1081,20 @@ class MemoryStore implements Store {
   async shredExpired() {
     const now = new Date().toISOString();
     const before = this.msgs.length;
-    this.msgs = this.msgs.filter((m) => !m.expiresAt || m.expiresAt >= now);
+    this.msgs = this.msgs.filter((m) => (!m.expiresAt || m.expiresAt >= now) && !m.destroyedAt);
     for (const [id, a] of this.atts.entries()) {
       if (a.expiresAt && a.expiresAt < now) this.atts.delete(id);
+    }
+    for (const [codeId, rc] of this.roomCodesMem.entries()) {
+      if ((rc.expiresAt && rc.expiresAt < now) || rc.revokedAt) {
+        await this.deleteRoom(rc.roomId);
+        this.roomCodesMem.delete(codeId);
+      }
+    }
+    for (const [sessionId, s] of this.sessions.entries()) {
+      if ((s.expiresAt && s.expiresAt < now) || s.revokedAt) {
+        this.sessions.delete(sessionId);
+      }
     }
     return before - this.msgs.length;
   }
@@ -1140,15 +1166,28 @@ class MemoryStore implements Store {
     if (r) this.roomCodesMem.set(id, { ...r, revokedAt: new Date().toISOString() });
   }
   async deleteRoom(roomId: string) {
-    this.msgs = this.msgs.map((m) => (m.roomId === roomId ? { ...m, body: null, destroyedAt: new Date().toISOString() } : m));
+    this.msgs = this.msgs.filter((m) => m.roomId !== roomId);
+    for (const [id, a] of this.atts.entries()) {
+      if (a.roomId === roomId) this.atts.delete(id);
+    }
     this.membership.delete(roomId);
     this.rooms.delete(roomId);
-    for (const [k, v] of [...this.roomCodesMem.entries()]) if (v.roomId === roomId) this.roomCodesMem.set(k, { ...v, revokedAt: new Date().toISOString() });
+    for (const [k, v] of [...this.roomCodesMem.entries()]) {
+      if (v.roomId === roomId) this.roomCodesMem.delete(k);
+    }
   }
 
   async listActiveRooms(limit: number) {
+    const now = new Date().toISOString();
     const out: { id: string; type: string; createdAt: string; defaultTtl: number | null; membersCount: number; expiresAt: string | null; uses: number; maxUsers: number }[] = [];
-    const roomsList = Array.from(this.rooms.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+    const roomsList = Array.from(this.rooms.values())
+      .filter((r) => {
+        const rc = Array.from(this.roomCodesMem.values()).find((c) => c.roomId === r.id);
+        if (!rc) return true;
+        return !rc.revokedAt && (!rc.expiresAt || rc.expiresAt > now);
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
     for (const r of roomsList) {
       const rc = Array.from(this.roomCodesMem.values()).find((c) => c.roomId === r.id && !c.revokedAt);
       const members = this.membership.get(r.id);
@@ -1185,22 +1224,26 @@ class MemoryStore implements Store {
     if (!u) return;
     for (const [rid, room] of [...this.rooms.entries()])
       if (room.createdBy === id || (this.membership.get(rid)?.has(id) ?? false)) {
-        this.msgs = this.msgs.map((m) => (m.roomId === rid ? { ...m, body: null, destroyedAt: new Date().toISOString() } : m));
-        this.membership.delete(rid);
-        this.rooms.delete(rid);
+        await this.deleteRoom(rid);
       }
-    this.msgs = this.msgs.map((m) => (m.senderId === id ? { ...m, body: null, destroyedAt: new Date().toISOString() } : m));
+    this.msgs = this.msgs.filter((m) => m.senderId !== id);
     for (const [k, s] of [...this.sessions.entries()]) if (s.userId === id) this.sessions.delete(k);
     this.users.set(id, { ...u, vaultBlob: "", vaultSalt: "", blocked: 1, note: "purged", ikPub: "", spkPub: "", spkSig: "", opkPubs: [] });
   }
   async counts() {
+    const now = new Date().toISOString();
+    const activeRooms = [...this.rooms.values()].filter((r) => {
+      const rc = [...this.roomCodesMem.values()].find((c) => c.roomId === r.id);
+      if (!rc) return true;
+      return !rc.revokedAt && (!rc.expiresAt || rc.expiresAt > now);
+    });
     return {
       users: this.users.size,
       blocked: [...this.users.values()].filter((u) => u.blocked).length,
-      rooms: this.rooms.size,
-      ciphertextRows: this.msgs.length,
-      invites: [...this.invitesMem.values()].filter((i) => !i.revokedAt).length,
-      activeSessions: [...this.sessions.values()].filter((s) => !s.revokedAt).length,
+      rooms: activeRooms.length,
+      ciphertextRows: this.msgs.filter((m) => (!m.expiresAt || m.expiresAt > now) && !m.destroyedAt && m.body).length,
+      invites: [...this.invitesMem.values()].filter((i) => !i.revokedAt && (!i.expiresAt || i.expiresAt > now)).length,
+      activeSessions: [...this.sessions.values()].filter((s) => !s.revokedAt && (!s.expiresAt || s.expiresAt > now)).length,
     };
   }
   async recentAudit(limit: number) {

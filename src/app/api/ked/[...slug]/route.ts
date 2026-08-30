@@ -602,10 +602,10 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
   const admin = await auth(req);
   const isAdmin = !!admin && admin.user.role === "admin";
 
-  if (path.startsWith("admin/") && !isAdmin) return err("admin role required", 403);
-
-  if (path === "admin/overview" && isAdmin)
+  if (path === "admin/overview" && isAdmin) {
+    await store.shredExpired().catch(() => 0);
     return json({ counts: await store.counts(), adapter: store.adapter, notice: await store.activeNotice(), inviteOnly: (process.env.SHER_INVITE_ONLY ?? process.env.KED_INVITE_ONLY ?? "1") !== "0" });
+  }
 
   if (path === "admin/policy" && isAdmin) {
     if (req.method === "POST") {
@@ -628,6 +628,7 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
   }
 
   if (path === "admin/rooms" && isAdmin) {
+    await store.shredExpired().catch(() => 0);
     const rooms = await store.listActiveRooms(100);
     return json({ rooms });
   }
@@ -1020,6 +1021,7 @@ async function handleGet(req: Request, ctx: Ctx): Promise<Response> {
     if (!isAdmin) return err("admin role required", 403);
 
     if (path === "admin/overview") {
+      await store.shredExpired().catch(() => 0);
       return json({
         counts: await store.counts(),
         adapter: store.adapter,
@@ -1029,6 +1031,7 @@ async function handleGet(req: Request, ctx: Ctx): Promise<Response> {
     }
 
     if (path === "admin/rooms") {
+      await store.shredExpired().catch(() => 0);
       const rooms = await store.listActiveRooms(100);
       return json({ rooms });
     }
