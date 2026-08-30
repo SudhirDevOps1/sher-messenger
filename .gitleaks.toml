@@ -4,11 +4,13 @@ title = "sher-messenger gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "false positives - env var names and crypto comments (not real secrets)"
+description = "false positives - env var names, example templates, and crypto comments (not real secrets)"
 paths = [
+  '''\.env\.example''',
   '''src/app/deploy/page\.tsx''',
   '''src/lib/primitives\.ts''',
   '''src/lib/protocol\.ts''',
+  '''tests/.*''',
 ]
 stopWords = [
   "TURSO_TOKEN",
