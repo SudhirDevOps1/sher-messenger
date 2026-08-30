@@ -45,7 +45,18 @@ async function bucket(route: string, req: Request, who: string) {
 
 async function auth(req: Request): Promise<{ user: UserRow; sessionId: string } | null> {
   const header = req.headers.get("authorization") || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  let token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) {
+    const cookie = req.headers.get("cookie") || "";
+    const match = cookie.match(/sh3r_admin_session=([^;]+)/);
+    if (match) token = match[1].trim();
+  }
+  if (!token) {
+    try {
+      const u = new URL(req.url);
+      token = u.searchParams.get("token") || "";
+    } catch {}
+  }
   if (!token) return null;
   const store = await getStore();
   const found = await store.authByTokenHash(sha(token));
@@ -966,6 +977,61 @@ async function handleGet(req: Request, ctx: Ctx): Promise<Response> {
     const me = await auth(req);
     if (!me) return err("unauthorised", 401);
     return json({ events: await store.listAudit(me.user.id, 40), adapter: store.adapter });
+  }
+
+  /* ------------------------------------------------------------ ADMIN GET ENDPOINTS */
+  if (path.startsWith("admin/")) {
+    const admin = await auth(req);
+    const isAdmin = !!admin && admin.user.role === "admin";
+    if (!isAdmin) return err("admin role required", 403);
+
+    if (path === "admin/overview") {
+      return json({
+        counts: await store.counts(),
+        adapter: store.adapter,
+        notice: await store.activeNotice(),
+        inviteOnly: (process.env.SHER_INVITE_ONLY ?? process.env.KED_INVITE_ONLY ?? "1") !== "0",
+      });
+    }
+
+    if (path === "admin/rooms") {
+      const rooms = await store.listActiveRooms(100);
+      return json({ rooms });
+    }
+
+    if (path === "admin/policy") {
+      return json({
+        ok: true,
+        policy: {
+          roomTtlDefaultMin: Number(process.env.ROOM_TTL_DEFAULT_MIN) || 30,
+          roomTtlHardCapMin: Number(process.env.ROOM_TTL_HARD_CAP_MIN) || 120,
+          maxParticipantsDefault: Number(process.env.ROOM_MAX_PARTICIPANTS_DEFAULT) || 10,
+          maxParticipantsCap: Number(process.env.ROOM_MAX_PARTICIPANTS_CAP) || 50,
+          perIpCreateRate: Number(process.env.ROOM_CREATE_PER_IP_PER_HOUR) || 5,
+          codeLockoutMin: Number(process.env.CODE_LOCK_MIN) || 15,
+          maintenanceMode: (process.env.MAINTENANCE_MODE || "false").toLowerCase() === "true",
+        },
+      });
+    }
+
+    if (path === "admin/users") {
+      const rows = await store.listUsers(300);
+      return json({
+        users: rows.map((u) => ({
+          id: u.id, username: u.username, createdAt: u.createdAt, lastSeen: u.lastSeen, role: u.role, blocked: u.blocked,
+          sessions: u.sessions, opkLeft: Math.max(0, u.opkPubs.length - u.opkUsed), note: u.note,
+          fingerprint: u.ikPub ? u.ikPub.slice(0, 14) : "(purged)",
+        })),
+      });
+    }
+
+    if (path === "admin/invites") {
+      return json({ invites: (await store.listInvites(200)).map((i) => ({ ...i, codeHash: i.codeHash.slice(0, 10) + "…" })) });
+    }
+
+    if (path === "admin/audit") {
+      return json({ events: await store.listAudit(admin!.user.id, 100) });
+    }
   }
 
   return err(`unknown endpoint GET /api/ked/${path}`, 404);

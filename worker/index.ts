@@ -2,7 +2,7 @@ import { RoomDO, type Env } from "./room-do";
 
 export { RoomDO };
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
@@ -35,3 +35,5 @@ export default {
     return new Response("SHER Messenger Edge Gateway", { status: 200 });
   },
 };
+
+export default worker;

@@ -576,6 +576,49 @@ export function Chat({
     }
   };
 
+  // Snapchat-style screenshot & capture detection (keyboard + snipping tool overlay focus loss)
+  useEffect(() => {
+    if (!roomId) return;
+    let lastAlert = 0;
+    const notifyScreenshot = async (reason = "screen capture") => {
+      const now = Date.now();
+      if (now - lastAlert < 4000) return; // debounce
+      lastAlert = now;
+      try {
+        await client.send({
+          roomId,
+          text: `📸 [PRIVACY ALERT] @${client.username || "Member"} took/attempted a ${reason}!`,
+        });
+      } catch {}
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (
+        key === "printscreen" ||
+        (e.ctrlKey && key === "p") ||
+        (e.metaKey && e.shiftKey && (key === "3" || key === "4" || key === "5" || key === "s")) ||
+        (e.ctrlKey && e.shiftKey && (key === "s" || key === "c" || key === "i")) ||
+        (e.altKey && key === "printscreen") ||
+        key === "f12"
+      ) {
+        void notifyScreenshot("screenshot / screen-grab shortcut");
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "printscreen") void notifyScreenshot("screenshot (PrintScreen)");
+    };
+
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [client, roomId]);
+
   if (!room)
     return (
       <section className="panel flex h-full flex-col items-center justify-center gap-4 p-10 text-center">
@@ -598,42 +641,6 @@ export function Chat({
         </div>
       </section>
     );
-
-  // Snapchat-style screenshot & capture detection
-  useEffect(() => {
-    if (!roomId) return;
-    let lastAlert = 0;
-    const notifyScreenshot = async () => {
-      const now = Date.now();
-      if (now - lastAlert < 5000) return; // debounce
-      lastAlert = now;
-      try {
-        await client.send({
-          roomId,
-          text: `📸 [PRIVACY ALERT] @${client.username || "Member"} took/attempted a screen capture!`,
-        });
-      } catch {}
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.key === "PrintScreen" ||
-        (e.ctrlKey && e.key.toLowerCase() === "p") ||
-        (e.metaKey && e.shiftKey && (e.key === "3" || e.key === "4" || e.key === "s" || e.key === "S")) ||
-        (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s")
-      ) {
-        void notifyScreenshot();
-      }
-    };
-
-    window.addEventListener("keyup", (e) => {
-      if (e.key === "PrintScreen") void notifyScreenshot();
-    });
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [client, roomId]);
 
   const name = room.type === "group" ? room.name ?? "group" : peer?.username ?? "dm";
 

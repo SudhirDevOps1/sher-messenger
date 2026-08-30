@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Chip, Icon } from "./ui";
+import { Chip, Icon, Modal } from "./ui";
 import { useI18n, type Lang } from "@/lib/i18n";
 import { KedClient } from "@/lib/client";
 
@@ -398,6 +398,8 @@ export default function Landing({
   onEnterGuest?: (client: KedClient) => void;
 }) {
   const { lang, setLang, t } = useI18n();
+  const [contactModal, setContactModal] = useState(false);
+  const contactFormAction = process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || "";
   return (
     <div className="relative z-[1] h-[100dvh] overflow-x-hidden overflow-y-auto scroll-smooth">
       {/* ---------------- nav */}
@@ -662,6 +664,9 @@ export default function Landing({
             SHER Messenger · MIT licensed · no analytics · no telemetry
           </span>
           <div className="row flex-wrap gap-1.5">
+            <button className="btn btn-sm" onClick={() => setContactModal(true)}>
+              {lang === "hi" ? "फीडबैक" : "Feedback"}
+            </button>
             <a className="btn btn-sm" href="/guide">
               Guide
             </a>
@@ -677,6 +682,45 @@ export default function Landing({
           </div>
         </div>
       </footer>
+
+      {/* Contact & Feedback Modal */}
+      <Modal open={contactModal} onClose={() => setContactModal(false)} title={lang === "hi" ? "संपर्क व फीडबैक" : "Contact & Feedback"} icon="spark">
+        <form
+          method="POST"
+          action={contactFormAction || "#"}
+          onSubmit={(e) => {
+            if (!contactFormAction) {
+              e.preventDefault();
+              alert(lang === "hi" ? "व्यवस्थापक द्वारा फीडबैक एंडपॉइंट कॉन्फ़िगर नहीं है।" : "Contact form endpoint is not configured by the deployer.");
+            }
+          }}
+          className="grid gap-3"
+        >
+          <p className="text-[12.5px] leading-relaxed text-[var(--ink-dim)]">
+            {lang === "hi"
+              ? "आपके सुझाव और संदेश सीधे व्यवस्थापक को सुरक्षित रूप से भेजे जाते हैं।"
+              : "Send your feedback, feature requests, or bug reports directly to the deployer."}
+          </p>
+          <div>
+            <label className="kicker mb-1 block">{lang === "hi" ? "आपका ईमेल" : "Your Email"}</label>
+            <input name="email" type="email" required placeholder="you@example.com" className="input" />
+          </div>
+          <div>
+            <label className="kicker mb-1 block">{lang === "hi" ? "संदेश" : "Message"}</label>
+            <textarea name="message" required placeholder={lang === "hi" ? "अपना संदेश यहाँ लिखें..." : "Type your message or question here..."} className="input min-h-[100px]" />
+          </div>
+          {/* Honeypot field */}
+          <input name="website" tabIndex={-1} autoComplete="off" style={{ display: "none" }} />
+          <div className="row justify-end gap-2 mt-2">
+            <button type="button" className="btn" onClick={() => setContactModal(false)}>
+              {lang === "hi" ? "रद्द करें" : "Cancel"}
+            </button>
+            <button type="submit" className="btn btn-primary">
+              {lang === "hi" ? "भेजें" : "Send Feedback"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

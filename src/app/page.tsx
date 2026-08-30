@@ -50,6 +50,15 @@ export default function Page() {
     }
   });
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [themeAccent, setThemeAccent] = useState<"emerald" | "blue" | "purple" | "amber" | "rose">(() => {
+    try {
+      return (localStorage.getItem("ked.accent") as "emerald" | "blue" | "purple" | "amber" | "rose") || "emerald";
+    } catch {
+      return "emerald";
+    }
+  });
+
   const toast = useCallback((msg: string, tone: "good" | "bad" = "good") => {
     const id = toastId.current++;
     setToasts((t) => [...t, { id, msg, tone }].slice(-4));
@@ -124,6 +133,7 @@ export default function Page() {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -381,8 +391,24 @@ export default function Page() {
       </>
     );
 
+  const accentStyles: Record<string, { acc: string; glow: string }> = {
+    emerald: { acc: "#4ff0b6", glow: "rgba(79,240,182,.15)" },
+    blue: { acc: "#38bdf8", glow: "rgba(56,189,248,.15)" },
+    purple: { acc: "#c084fc", glow: "rgba(192,132,252,.15)" },
+    amber: { acc: "#fbbf24", glow: "rgba(251,191,36,.15)" },
+    rose: { acc: "#fb7185", glow: "rgba(251,113,133,.15)" },
+  };
+
+  const currentTheme = accentStyles[themeAccent] || accentStyles.emerald;
+
   return (
-    <div className="shell">
+    <div
+      className="shell"
+      style={{
+        ["--acc" as any]: currentTheme.acc,
+        ["--acc-glow" as any]: currentTheme.glow,
+      }}
+    >
       <header className="row items-center justify-between gap-3 border-b border-[var(--line)] px-3 py-2.5 md:px-4">
         <div className="row min-w-0 gap-3">
           <span className="grid h-8 w-8 flex-none place-items-center rounded-xl border border-[var(--line-strong)] bg-[rgba(79,240,182,.12)] text-[var(--acc)]">
@@ -390,7 +416,7 @@ export default function Page() {
           </span>
           <div className="min-w-0">
             <div className="text-[13.5px] font-bold leading-none tracking-tight">
-              KED<span className="text-[var(--acc)]">·</span>VAULT
+              SHER<span className="text-[var(--acc)]">·</span>MESSENGER
             </div>
             <div className="mono mt-1 truncate text-[9.5px] text-[var(--ink-faint)]">@{client.username}</div>
           </div>
@@ -398,10 +424,10 @@ export default function Page() {
 
         <div className="hidden items-center gap-1.5 lg:flex">
           <Chip tone="good">
-            <span className="dot" /> e2ee · double ratchet
+            <span className="dot" /> e2ee · zero-knowledge
           </Chip>
           <Chip tone="acc">
-            <Icon name="db" size={11} /> {String(client.stats?.adapter ?? relay?.adapter ?? "relay")}
+            <Icon name="db" size={11} /> {String(client.stats?.adapter ?? relay?.adapter ?? "edge-memory")}
           </Chip>
           <Chip tone={pollAge > 8 ? "warn" : ""}>
             <Icon name="refresh" size={11} /> sync {pollAge}s ago
@@ -411,6 +437,29 @@ export default function Page() {
         </div>
 
         <div className="row gap-1.5">
+          <button
+            className={`btn btn-sm ${!sidebarOpen ? "!border-[var(--acc)] !text-[var(--acc)] font-semibold" : ""}`}
+            onClick={() => setSidebarOpen((s) => !s)}
+            title={sidebarOpen ? "Collapse sidebar for full screen chat" : "Show sidebar"}
+          >
+            <Icon name="chevron" size={12} className={sidebarOpen ? "rotate-180" : ""} />
+            <span className="hidden sm:inline">{sidebarOpen ? (lang === "hi" ? "फुल स्पेस" : "Full Space") : (lang === "hi" ? "साइडबार" : "Sidebar")}</span>
+          </button>
+
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              const accents: Array<"emerald" | "blue" | "purple" | "amber" | "rose"> = ["emerald", "blue", "purple", "amber", "rose"];
+              const next = accents[(accents.indexOf(themeAccent) + 1) % accents.length];
+              setThemeAccent(next);
+              try { localStorage.setItem("ked.accent", next); } catch {}
+            }}
+            title="Switch theme accent color"
+          >
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: currentTheme.acc }} />
+            <span className="hidden lg:inline capitalize text-[11px]">{themeAccent}</span>
+          </button>
+
           <button
             className="btn btn-sm"
             onClick={() => {
@@ -435,7 +484,7 @@ export default function Page() {
             <Icon name="doc" size={13} /> <span className="hidden sm:inline">Plan</span>
           </a>
           {me?.role === "admin" ? (
-            <a className="btn btn-sm" href="/admin" title="Admin console">
+            <a className="btn btn-sm" href="/sh3r-9x-admin" title="Admin console">
               <Icon name="shield" size={13} /> <span className="hidden sm:inline">Admin</span>
             </a>
           ) : null}
@@ -482,7 +531,7 @@ export default function Page() {
             <b>SYSTEM NOTICE (not E2EE)</b> — {notice.body}
           </span>
           {me?.role === "admin" ? (
-            <a className="btn btn-sm flex-none" href="/admin">
+            <a className="btn btn-sm flex-none" href="/sh3r-9x-admin">
               admin
             </a>
           ) : null}
@@ -507,20 +556,32 @@ export default function Page() {
         </div>
       ) : null}
 
-      <main className={`grid min-h-0 flex-1 gap-2.5 p-2.5 md:gap-3 md:p-3 ${inspector ? "lg:grid-cols-[288px_minmax(0,1fr)_336px]" : "lg:grid-cols-[288px_minmax(0,1fr)]"}`}>
-        <div className={`${mobile === "rooms" ? "flex" : "hidden"} min-h-0 lg:flex`}>
-          <Sidebar
-            client={client}
-            activeRoomId={room}
-            onSelect={(id) => {
-              openRoom(id);
-              void client.poll();
-            }}
-            onNewContact={() => setModal("dm")}
-            onNewGroup={() => setModal("group")}
-            lastOpen={lastOpen}
-          />
-        </div>
+      <main
+        className={`grid min-h-0 flex-1 gap-2.5 p-2.5 md:gap-3 md:p-3 ${
+          inspector
+            ? sidebarOpen
+              ? "lg:grid-cols-[280px_minmax(0,1fr)_336px]"
+              : "lg:grid-cols-[minmax(0,1fr)_336px]"
+            : sidebarOpen
+            ? "lg:grid-cols-[280px_minmax(0,1fr)]"
+            : "grid-cols-1"
+        }`}
+      >
+        {sidebarOpen ? (
+          <div className={`${mobile === "rooms" ? "flex" : "hidden"} min-h-0 lg:flex`}>
+            <Sidebar
+              client={client}
+              activeRoomId={room}
+              onSelect={(id) => {
+                openRoom(id);
+                void client.poll();
+              }}
+              onNewContact={() => setModal("dm")}
+              onNewGroup={() => setModal("group")}
+              lastOpen={lastOpen}
+            />
+          </div>
+        ) : null}
         <div className={`${mobile === "chat" ? "flex" : "hidden"} min-h-0 flex-col gap-2 lg:flex`}>
           <div className="row gap-2 lg:hidden">
             <button className="btn btn-sm" onClick={() => setMobile("rooms")}>
