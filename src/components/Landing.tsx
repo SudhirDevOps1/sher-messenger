@@ -152,10 +152,72 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Auto-detect room parameter from URL on load
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const r = sp.get("room") || sp.get("join");
+      if (r) {
+        setJoinCode(r.toLowerCase());
+        const k = window.location.hash.includes("k=") ? window.location.hash.replace("#k=", "") : "";
+        if (k) setJoinKey(k);
+      }
+    } catch {}
+  }, []);
+
+  const parseCodeFromInput = (raw: string) => {
+    let clean = raw.trim();
+    let key = "";
+    if (clean.includes("/?room=") || clean.includes("/r/")) {
+      try {
+        const u = new URL(clean);
+        clean = u.searchParams.get("room") || u.pathname.split("/").pop() || "";
+        if (u.hash.includes("k=")) {
+          key = u.hash.replace("#k=", "");
+        }
+      } catch {}
+    }
+    return { code: clean, key };
+  };
+
+  const isCodeInput = (raw: string) => {
+    const { code, key } = parseCodeFromInput(raw);
+    return /^[a-zA-Z0-9]{6}$/.test(code) || !!key;
+  };
+
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setErr(null);
+
+    const rawInput = createUserName.trim();
+    const { code: detectedCode, key: detectedKey } = parseCodeFromInput(rawInput);
+
+    // If user entered an existing 6-character room code (e.g. cb34ce) in the input,
+    // seamlessly join that room instead of creating an unwanted new one!
+    if (/^[a-zA-Z0-9]{6}$/.test(detectedCode) || detectedKey) {
+      try {
+        const res = await KedClient.joinGuestRoom({
+          displayName: lang === "hi" ? "अतिथि" : "Guest",
+          code: detectedCode.toLowerCase(),
+          key: detectedKey,
+        });
+        if (onEnterGuest) {
+          onEnterGuest(res.client);
+          return;
+        }
+      } catch (errJoin) {
+        setErr(
+          lang === "hi"
+            ? `रूम कोड #${detectedCode.toUpperCase()} नहीं मिला या समाप्त हो चुका है। नया रूम बनाने के लिए कृपया अपना नाम दर्ज करें।`
+            : `Room #${detectedCode.toUpperCase()} not found or expired. To create a new room, please enter your name.`
+        );
+        setBusy(false);
+        return;
+      }
+    }
+
     try {
       const res = await KedClient.createGuestRoom({
         displayName: createUserName.trim() || (lang === "hi" ? "अतिथि" : "Guest"),
@@ -176,28 +238,20 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
 
   const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    let code = joinCode.trim();
-    let key = joinKey.trim();
+    const { code, key } = parseCodeFromInput(joinCode);
 
-    // Support pasting full link
-    if (code.includes("/?room=") || code.includes("/r/")) {
-      try {
-        const u = new URL(code);
-        code = u.searchParams.get("room") || u.pathname.split("/").pop() || "";
-        if (u.hash.includes("k=")) {
-          key = u.hash.replace("#k=", "");
-        }
-      } catch {}
+    if (!code || code.length < 6) {
+      setErr(lang === "hi" ? "कृपया 6-अक्षरों का रूम कोड दर्ज करें।" : "Please enter a valid 6-character room code.");
+      return;
     }
 
-    if (!code || code.length < 6) return;
     setBusy(true);
     setErr(null);
     try {
       const res = await KedClient.joinGuestRoom({
         displayName: joinUserName.trim() || (lang === "hi" ? "सहभागी" : "Member"),
         code: code.toLowerCase(),
-        key,
+        key: key || joinKey,
       });
       if (onEnterGuest) {
         onEnterGuest(res.client);
@@ -256,10 +310,31 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
               <input
                 className="input"
                 value={createUserName}
-                onChange={(e) => setCreateUserName(e.target.value.slice(0, 24))}
-                placeholder={lang === "hi" ? "उदा. अमन" : "e.g. Alex"}
+                onChange={(e) => setCreateUserName(e.target.value.slice(0, 48))}
+                placeholder={lang === "hi" ? "उदा. अमन (आपका नाम)" : "e.g. Alex (Your Name)"}
                 required
               />
+              {isCodeInput(createUserName) ? (
+                <div className="mt-2 row items-center justify-between rounded-lg bg-[rgba(79,240,182,.12)] border border-[rgba(79,240,182,.3)] p-2">
+                  <span className="text-[11px] font-medium text-[var(--acc)]">
+                    ⚡ {lang === "hi" ? `रूम कोड #${parseCodeFromInput(createUserName).code.toUpperCase()} पहचाना गया:` : `Room Code #${parseCodeFromInput(createUserName).code.toUpperCase()} detected:`}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm !py-1 !text-[11px] !font-bold"
+                    onClick={() => {
+                      const { code, key } = parseCodeFromInput(createUserName);
+                      void KedClient.joinGuestRoom({
+                        displayName: lang === "hi" ? "अतिथि" : "Guest",
+                        code: code.toLowerCase(),
+                        key,
+                      }).then((res) => onEnterGuest && onEnterGuest(res.client)).catch((e) => setErr((e as Error).message));
+                    }}
+                  >
+                    {lang === "hi" ? "सीधे जुड़ें ➔" : "Join Directly ➔"}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -311,7 +386,7 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
               className="btn btn-primary mt-2 justify-center py-2.5"
               disabled={busy || !createUserName.trim()}
             >
-              <Icon name="plus" size={14} /> {busy ? "Creating..." : t("createRoomBtn")}
+              <Icon name="plus" size={14} /> {busy ? "..." : (isCodeInput(createUserName) ? (lang === "hi" ? "रूम में शामिल हों ➔" : "Join Detected Room ➔") : t("createRoomBtn"))}
             </button>
           </form>
         )}
@@ -330,13 +405,12 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
 
         <form onSubmit={handleJoinRoom} className="mt-4 grid gap-2.5">
           <div>
-            <label className="kicker mb-1 block">{t("displayName")}</label>
+            <label className="kicker mb-1 block">{t("displayName")} <span className="text-[10px] text-[var(--ink-dim)] font-normal">({lang === "hi" ? "वैकल्पिक" : "optional"})</span></label>
             <input
               className="input"
               value={joinUserName}
               onChange={(e) => setJoinUserName(e.target.value.slice(0, 24))}
-              placeholder={lang === "hi" ? "उदा. राहुल" : "e.g. Sam"}
-              required
+              placeholder={lang === "hi" ? "उदा. राहुल (वैकल्पिक)" : "e.g. Sam (optional)"}
             />
           </div>
 
@@ -346,7 +420,7 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
               className="input mono tracking-wider font-semibold"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.trim())}
-              placeholder="e.g. a7f2k9 or https://..."
+              placeholder="e.g. cb34ce or https://..."
               required
             />
           </div>
@@ -354,7 +428,7 @@ function FreeRoomDemo({ onEnterGuest }: { onEnterGuest?: (client: KedClient) => 
           <button
             type="submit"
             className="btn mt-2 justify-center py-2.5"
-            disabled={busy || joinCode.length < 6 || !joinUserName.trim()}
+            disabled={busy || joinCode.trim().length < 6}
           >
             <Icon name="chevron" size={14} /> {busy ? "Joining..." : t("joinRoomBtn")}
           </button>
