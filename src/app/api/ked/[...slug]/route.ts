@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, pbkdf2Sync, randomUUID } from "node:crypto";
 import { RATE_RULES, clientIp, getStore, type InviteRow, type MessageRow, type NoticeRow, type UserRow } from "@/server/store";
 
 export const runtime = "nodejs";
@@ -514,10 +514,22 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     const email = str(b.email, 320).trim().toLowerCase();
     const pass = str(b.pass, 320);
     const expEmail = (process.env.ADMIN_EMAIL ?? process.env.SHER_ADMIN_EMAIL ?? "admin@example.com").trim().toLowerCase();
+    const expHash = process.env.ADMIN_PASSWORD_HASH ?? process.env.SHER_ADMIN_PASSWORD_HASH ?? "";
     const expPass = process.env.ADMIN_PASSWORD ?? process.env.SHER_ADMIN_PASSWORD ?? process.env.ADMIN_PASS ?? process.env.SHER_ADMIN_PASS ?? "admin123";
     
     const okEmail = email.length === expEmail.length && timingSafe(email, expEmail);
-    const okPass = pass.length === expPass.length && timingSafe(pass, expPass);
+    let okPass = false;
+    if (expHash && expHash.startsWith("$pbkdf2-sha256$")) {
+      const parts = expHash.split("$");
+      const iters = parseInt(parts[2]?.replace("i=", "") || "250000", 10);
+      const salt = parts[3] || "";
+      const expected = parts[4] || "";
+      const computed = pbkdf2Sync(pass, salt, iters, 32, "sha256").toString("hex");
+      okPass = timingSafe(computed, expected);
+    } else {
+      okPass = pass.length === expPass.length && timingSafe(pass, expPass);
+    }
+
     if (!okEmail || !okPass) return err("invalid admin email or password", 403);
 
     // Provision or verify admin operator user
@@ -554,7 +566,10 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     const targetUserId = adminUser ? adminUser.id : adminId;
     const session = await issueSession(targetUserId, req, "Admin Console");
     await store.audit(targetUserId, "admin.login", `Admin logged in successfully from ${clientIp(req)}`, nowIso());
-    return json({ ok: true, token: session.token, username: "admin", role: "admin", expiresAt: session.expiresAt });
+
+    const res = json({ ok: true, token: session.token, username: "admin", role: "admin", expiresAt: session.expiresAt });
+    res.headers.append("Set-Cookie", `sh3r_admin_session=${session.token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`);
+    return res;
   }
 
   if (path === "admin/env-auth") {
@@ -581,6 +596,26 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
   if (path === "admin/overview" && isAdmin)
     return json({ counts: await store.counts(), adapter: store.adapter, notice: await store.activeNotice(), inviteOnly: (process.env.SHER_INVITE_ONLY ?? process.env.KED_INVITE_ONLY ?? "1") !== "0" });
 
+  if (path === "admin/policy" && isAdmin) {
+    if (req.method === "POST") {
+      const b = await payload(req);
+      await store.audit(admin!.user.id, "policy.updated", JSON.stringify(b).slice(0, 200), nowIso());
+      return json({ ok: true, policy: b });
+    }
+    return json({
+      ok: true,
+      policy: {
+        roomTtlDefaultMin: Number(process.env.ROOM_TTL_DEFAULT_MIN) || 30,
+        roomTtlHardCapMin: Number(process.env.ROOM_TTL_HARD_CAP_MIN) || 120,
+        maxParticipantsDefault: Number(process.env.ROOM_MAX_PARTICIPANTS_DEFAULT) || 10,
+        maxParticipantsCap: Number(process.env.ROOM_MAX_PARTICIPANTS_CAP) || 50,
+        perIpCreateRate: Number(process.env.ROOM_CREATE_PER_IP_PER_HOUR) || 5,
+        codeLockoutMin: Number(process.env.CODE_LOCK_MIN) || 15,
+        maintenanceMode: (process.env.MAINTENANCE_MODE || "false").toLowerCase() === "true",
+      },
+    });
+  }
+
   if (path === "admin/rooms" && isAdmin) {
     const rooms = await store.listActiveRooms(100);
     return json({ rooms });
@@ -593,6 +628,15 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
     await store.deleteRoom(roomId);
     await store.audit(admin!.user.id, "room.terminated", roomId, nowIso());
     return json({ ok: true });
+  }
+
+  if (path === "admin/all-burn" && isAdmin) {
+    const rooms = await store.listActiveRooms(500);
+    for (const r of rooms) {
+      await store.deleteRoom(r.id);
+    }
+    await store.audit(admin!.user.id, "all.rooms.burned", `Terminated ${rooms.length} active rooms`, nowIso());
+    return json({ ok: true, count: rooms.length });
   }
 
   if (path === "admin/users" && isAdmin) {

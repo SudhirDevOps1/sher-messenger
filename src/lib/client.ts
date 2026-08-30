@@ -46,6 +46,7 @@ import {
   createIdentity,
   decryptAttachment,
   encryptAttachment,
+  generateHardcoreKey,
   groupDecrypt,
   groupEncrypt,
   ephemeralEncrypt,
@@ -287,6 +288,7 @@ export class KedClient {
   stats: Record<string, unknown> | null = null;
   isGuest = false;
   roomCode?: string;
+  roomKey?: string;
   roomExpiresAt?: number;
 
   private keyBytes: Bytes | null = null;
@@ -312,7 +314,13 @@ export class KedClient {
     for (const fn of this.listeners) fn();
   }
 
-  static async createGuestRoom(opts: { displayName: string; roomName?: string; maxUsers?: number; ttlMs?: number }): Promise<{ client: KedClient; code: string; roomId: string; expiresAt: string }> {
+  static async createGuestRoom(opts: {
+    displayName: string;
+    roomName?: string;
+    maxUsers?: number;
+    ttlMs?: number;
+    hardcore?: boolean;
+  }): Promise<{ client: KedClient; code: string; roomId: string; key: string; expiresAt: string }> {
     const c = new KedClient();
     c.isGuest = true;
     const name = opts.displayName.trim() || `Guest-${randomToken(4)}`;
@@ -323,8 +331,11 @@ export class KedClient {
     c.data.identity = await createIdentity();
     c.keyBytes = rnd(32);
     c.keySalt = b64e(rnd(16));
-    
-    const maxUsers = opts.maxUsers ?? 5;
+
+    const hardcoreKey = opts.hardcore !== false ? generateHardcoreKey() : "";
+    c.roomKey = hardcoreKey;
+
+    const maxUsers = opts.maxUsers ?? 10;
     const ttlMs = opts.ttlMs ?? 30 * 60_000;
     const roomTitle = opts.roomName?.trim() || "Ephemeral Room";
 
@@ -340,7 +351,7 @@ export class KedClient {
 
     c.roomCode = res.code;
     c.roomExpiresAt = Date.parse(res.expiresAt);
-    
+
     const gid = res.roomId;
     c.data.rooms[gid] = {
       id: gid,
@@ -358,15 +369,17 @@ export class KedClient {
     };
 
     c.startGuest(gid);
-    return { client: c, code: res.code, roomId: res.roomId, expiresAt: res.expiresAt };
+    return { client: c, code: res.code, roomId: res.roomId, key: hardcoreKey, expiresAt: res.expiresAt };
   }
 
-  static async joinGuestRoom(opts: { displayName: string; code: string }): Promise<{ client: KedClient; roomId: string }> {
+  static async joinGuestRoom(opts: { displayName: string; code: string; key?: string }): Promise<{ client: KedClient; roomId: string }> {
     const c = new KedClient();
     c.isGuest = true;
     const code = opts.code.trim().toLowerCase();
     const name = opts.displayName.trim() || `Guest-${randomToken(4)}`;
     c.username = name;
+    c.roomCode = code;
+    c.roomKey = opts.key?.trim() || "";
     const anonUserId = `u_anon_${randomToken(12)}`;
     c.userId = anonUserId;
     c.data = emptyVault(name);
@@ -382,7 +395,8 @@ export class KedClient {
       }),
     });
 
-    c.roomCode = code;
+    if (!res.ok) throw new Error(res.error || "Failed to join room");
+
     const gid = res.roomId;
     c.data.rooms[gid] = {
       id: gid,
@@ -400,7 +414,7 @@ export class KedClient {
     };
 
     c.startGuest(gid);
-    return { client: c, roomId: res.roomId };
+    return { client: c, roomId: gid };
   }
 
   private startGuest(roomId: string) {
@@ -708,7 +722,7 @@ export class KedClient {
     let value: Record<string, unknown>;
     try {
       if (this.isGuest || (isGroup && (!this.data.groups[item.roomId] || Object.keys(this.data.groups[item.roomId].peers).length === 0))) {
-        const out = await ephemeralDecrypt(item.roomId, item.header, item.body, this.roomCode);
+        const out = await ephemeralDecrypt(item.roomId, item.header, item.body, this.roomCode, this.roomKey);
         value = out.value as Record<string, unknown>;
       } else if (isGroup) {
         const g = this.data.groups[item.roomId];
@@ -956,7 +970,8 @@ export class KedClient {
         roomId,
         payload,
         (this.data.history[roomId]?.length ?? 0) + 1,
-        this.roomCode
+        this.roomCode,
+        this.roomKey
       );
       wire = out.wire;
     } else if (room.type === "group") {

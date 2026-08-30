@@ -1,0 +1,38 @@
+name = "sher-messenger"
+main = "worker/index.ts"
+compatibility_date = "2026-08-20"
+workers_dev = true
+
+keep_vars = true
+
+[vars]
+APP_NAME = "Sher Messenger"
+DOCS_MODE = "production"
+ROOM_TTL_HARD_CAP_MIN = "120"      # admin-policy iske andar hi set karegi
+ENV_TAG = "production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sher-ops"
+database_id = "<D1_DATABASE_ID from .env>"
+
+[durable_objects]
+bindings = [
+  { name = "ROOMS", class_name = "RoomDO" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO"]
+
+[[kv_namespaces]]
+binding = "KV"                      # rate-limit counters only
+id = "<KV_NAMESPACE_ID from .env>"
+
+# Phase-2 (attachments) — rahi sirf jab STORE_TARGET=r2:
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "sher-ephemeral"
+
+[observability.logs]
+enabled = true

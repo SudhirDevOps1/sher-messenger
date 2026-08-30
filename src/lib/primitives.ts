@@ -40,6 +40,28 @@ export function b64e(b: Bytes): B64 {
   return btoa(s);
 }
 
+export function b64urlEncode(b: Bytes): string {
+  return b64e(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function b64urlDecode(s: string): Bytes {
+  let standard = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (standard.length % 4) standard += "=";
+  return b64d(standard);
+}
+
+export function zeroize(b: Uint8Array | ArrayBuffer | null | undefined): void {
+  if (!b) return;
+  if (b instanceof Uint8Array) {
+    crypto.getRandomValues(b);
+    b.fill(0);
+  } else if (b instanceof ArrayBuffer) {
+    const view = new Uint8Array(b);
+    crypto.getRandomValues(view);
+    view.fill(0);
+  }
+}
+
 /** Strict-but-forgiving base64 test: standard or URL-safe alphabet, padding optional. */
 export function isB64(s: unknown): boolean {
   if (typeof s !== "string" || s.length === 0) return false;

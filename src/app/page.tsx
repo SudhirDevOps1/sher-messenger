@@ -66,18 +66,24 @@ export default function Page() {
     try {
       const sp = new URLSearchParams(location.search);
       const p = sp.get("invite");
-      const rCode = sp.get("room") || sp.get("join");
-      if (rCode) {
-        // Auto-join room from URL
-        void KedClient.joinGuestRoom({ displayName: "Guest", code: rCode }).then((res) => {
+      const roomParam = sp.get("room") || sp.get("join");
+      const hashKey = location.hash.includes("k=") ? location.hash.replace("#k=", "") : "";
+
+      if (roomParam) {
+        void KedClient.joinGuestRoom({
+          displayName: "Guest",
+          code: roomParam.toLowerCase(),
+          key: hashKey,
+        }).then((res) => {
           if (alive && res?.client) {
             setClient(res.client);
             setPhase("app");
             setRoom(res.roomId);
             toast(lang === "hi" ? "रूम में शामिल हो गए" : "Joined room via link", "good");
           }
-        }).catch(() => undefined);
+        }).catch(() => {});
       }
+
       if (p) {
         setInviteCode(p);
         try {

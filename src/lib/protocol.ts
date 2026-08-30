@@ -20,6 +20,8 @@ import {
   type KeyPair,
   b64d,
   b64e,
+  b64urlEncode,
+  b64urlDecode,
   concat,
   ecdh,
   ecdsaSign,
@@ -28,6 +30,7 @@ import {
   hkdf,
   hkdf2,
   openAead,
+  pbkdf2,
   rnd,
   seal,
   sha256,
@@ -454,11 +457,40 @@ export async function decryptAttachment(cipherB64: string, key: AttachmentKey): 
   return plain;
 }
 
-/* ------------------------------------------------------------------ ephemeral room crypto */
+/* ------------------------------------------------------------------ ephemeral room crypto (v2: Hardcore #k= + Code-Nity PBKDF2) */
 
-export async function ephemeralRoomKey(roomId: string, code?: string): Promise<Bytes> {
-  const secret = utf8(`SHER-EPHEMERAL-SECRET:${roomId}:${code ? code.toLowerCase() : ""}`);
-  return sha256(secret);
+export function generateHardcoreKey(): string {
+  return b64urlEncode(rnd(32));
+}
+
+/**
+ * Derives a 256-bit AES-GCM message key from a 6-character room code using PBKDF2 (250,000 iterations).
+ */
+export async function deriveCodeNityKey(code: string, roomId: string): Promise<Bytes> {
+  const cleanCode = code.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const salt = await sha256(utf8(`SHER-CODENITY-SALT:${roomId}`));
+  return pbkdf2(cleanCode, salt, 250_000, 32);
+}
+
+/**
+ * Returns raw 32-byte key from either a hardcore base64url fragment key or PBKDF2 from room code.
+ */
+export async function resolveRoomKey(params: { key?: string; code?: string; roomId: string }): Promise<Bytes> {
+  if (params.key && params.key.trim().length >= 32) {
+    try {
+      return b64urlDecode(params.key.trim());
+    } catch {
+      // Fallback
+    }
+  }
+  if (params.code) {
+    return deriveCodeNityKey(params.code, params.roomId);
+  }
+  return sha256(utf8(`SHER-FALLBACK-SECRET:${params.roomId}`));
+}
+
+export async function ephemeralRoomKey(roomId: string, code?: string, fragKey?: string): Promise<Bytes> {
+  return resolveRoomKey({ key: fragKey, code, roomId });
 }
 
 export async function ephemeralEncrypt(
@@ -466,9 +498,10 @@ export async function ephemeralEncrypt(
   roomId: string,
   plaintext: unknown,
   seq: number = 0,
-  code?: string
+  code?: string,
+  fragKey?: string
 ): Promise<{ wire: OutMessage }> {
-  const rKey = await ephemeralRoomKey(roomId, code);
+  const rKey = await resolveRoomKey({ key: fragKey, code, roomId });
   const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${seq}`);
   const core: Omit<MsgHeader, "sig"> = {
     v: PROTOCOL_VERSION,
@@ -490,14 +523,16 @@ export async function ephemeralDecrypt(
   roomId: string,
   header: MsgHeader,
   body: B64,
-  code?: string
+  code?: string,
+  fragKey?: string
 ): Promise<{ value: unknown; authenticated: boolean }> {
   const authenticated = await verifyHeader(header, body);
-  const rKey = await ephemeralRoomKey(roomId, code);
+  const rKey = await resolveRoomKey({ key: fragKey, code, roomId });
   const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${header.n}`);
   const env = unpackEnvelope(body, "ephemeral message body");
   const plain = await openAead(msgKey, env, utf8(JSON.stringify(stripSig(header))));
   const value = JSON.parse(new TextDecoder().decode(plain));
   return { value, authenticated };
 }
+
 

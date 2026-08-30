@@ -599,6 +599,42 @@ export function Chat({
       </section>
     );
 
+  // Snapchat-style screenshot & capture detection
+  useEffect(() => {
+    if (!roomId) return;
+    let lastAlert = 0;
+    const notifyScreenshot = async () => {
+      const now = Date.now();
+      if (now - lastAlert < 5000) return; // debounce
+      lastAlert = now;
+      try {
+        await client.send({
+          roomId,
+          text: `📸 [PRIVACY ALERT] @${client.username || "Member"} took/attempted a screen capture!`,
+        });
+      } catch {}
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === "PrintScreen" ||
+        (e.ctrlKey && e.key.toLowerCase() === "p") ||
+        (e.metaKey && e.shiftKey && (e.key === "3" || e.key === "4" || e.key === "s" || e.key === "S")) ||
+        (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s")
+      ) {
+        void notifyScreenshot();
+      }
+    };
+
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "PrintScreen") void notifyScreenshot();
+    });
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [client, roomId]);
+
   const name = room.type === "group" ? room.name ?? "group" : peer?.username ?? "dm";
 
   return (
@@ -609,6 +645,15 @@ export function Chat({
           <div className="min-w-0">
             <div className="row gap-2">
               <h2 className="truncate text-[14.5px] font-bold tracking-tight">{name}</h2>
+              {client.roomKey ? (
+                <Chip tone="good" title="Hardcore E2EE: 256-bit key in link fragment">
+                  <Icon name="lock" size={10} /> Hardcore #k=
+                </Chip>
+              ) : client.roomCode ? (
+                <Chip tone="acc" title="Code-Nity: PBKDF2 250k key derivation">
+                  <Icon name="shield" size={10} /> Code-Nity
+                </Chip>
+              ) : null}
               {room.type === "group" ? (
                 <Chip tone="acc">
                   <Icon name="users" size={10} /> {room.members.length}
@@ -629,7 +674,7 @@ export function Chat({
               )}
             </div>
             <div className="mono mt-0.5 truncate text-[10px] text-[var(--ink-faint)]">
-              room {room.id.slice(0, 14)}… · {peer?.safety ? `safety ${peer.safety.slice(0, 15)}…` : "sender keys"}
+              room {room.id.slice(0, 14)}… · {client.roomKey ? "fragment key in memory" : peer?.safety ? `safety ${peer.safety.slice(0, 15)}…` : "sender keys"}
             </div>
           </div>
         </div>
