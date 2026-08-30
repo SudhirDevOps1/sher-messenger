@@ -64,7 +64,7 @@ TLS: put Caddy in front (`ked.example.com { reverse_proxy localhost:3000 }`) —
 
 ### Free 30m rooms — no login (anon ephemerals) · Ephemeral room codes (ops)
 
-> **FREE without login (bina login ke):** regular users never need an account. `rooms/code`, `rooms/join`, `send`, `sync` all accept `anonId` fallback (`route.ts:278,303,322,778`). `anonId = anon_<12 hex>` is generated client-side in memory/`sessionStorage` only, never stored in `ked_users`. Only the admin panel requires `ADMIN_EMAIL`/`ADMIN_PASSWORD` + bearer.
+> **FREE without login (Zero-Login Ephemeral Mode):** regular users never need an account. `rooms/code`, `rooms/join`, `send`, `sync` all accept `anonId` fallback (`route.ts:278,303,322,778`). `anonId = anon_<12 hex>` is generated client-side in memory/`sessionStorage` only, never stored in `ked_users`. Only the admin panel requires `ADMIN_EMAIL`/`ADMIN_PASSWORD` + bearer.
 
 - **Mint (no auth):** any **anon or auth** user may `POST /api/ked/rooms/code {anonId?, maxUsers:2-30, ttlMs:60_000-30*60_000}` — default `maxUsers=5`, `ttlMs=30m` (hard cap `30*60_000`). `userId = auth?.user.id ?? anonId ?? auto anon_xxx` (`route.ts:282`). Returns `{roomId, code, maxUsers, expiresAt}`. Stored as `ked_room_codes` with `code_hash = SHA-256(code)` and `created_by = anon_xxx` or `u_…` — no `ked_users` row for anon.
 - **Join (no auth):** `POST /api/ked/rooms/join {code, anonId?}` → `consumeRoomCode(SHA(code), userId)` checks `revokedAt`, `expiresAt`, `uses < maxUsers`, `members < maxUsers` (`src/server/store.ts:consumeRoomCode`). Already-member is idempotent. `userId` may be `anon_xxx`.

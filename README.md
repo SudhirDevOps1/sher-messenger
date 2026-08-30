@@ -37,18 +37,18 @@ The app also ships an interactive **`/deploy` wizard**: paste your GitHub fork o
 
 ## 📊 Personal Use & Daily Free-Tier Traffic Budget (₹0 Cost)
 
-Kitna daily personal use / traffic support karega bina kisi charge ke:
+Daily free-tier capacity and zero-cost traffic allowances across supported cloud providers:
 
 | Platform / Service | Free-Tier Limit | SHER-MESSENGER Usage Pattern | Daily Free Capacity |
 | :--- | :--- | :--- | :--- |
-| **Cloudflare Pages** | **Unlimited** static requests & bandwidth | React Next.js UI & PWA bundle deliver karta hai | **Unlimited Visitors** |
+| **Cloudflare Pages** | **Unlimited** static requests & bandwidth | React Next.js UI & PWA bundle delivery | **Unlimited Visitors** |
 | **Cloudflare Workers** | **100,000 req/day** (10ms CPU limit) | WebSocket upgrade & ephemeral room API endpoints | **~50,000 – 90,000 messages/day** (~2,500 rooms/day) |
-| **Cloudflare Durable Objects** | **~13,000 GB-seconds/day** (Free SQLite DO) | WebSocket Hibernation se live in-memory relay | **500+ concurrent active rooms** ek sath |
-| **Cloudflare D1 Database** | **5 GB storage · 100,000 writes/day** | Rate-limiting & admin audit logs (Chat RAM me rehti hai) | **~100,000 room actions/day** |
-| **Neon Serverless Postgres** | **0.5 GB storage · 100 compute hrs/mo** | Optional persistence for operator admin configs | **10,000+ daily queries** |
+| **Cloudflare Durable Objects** | **~13,000 GB-seconds/day** (Free SQLite DO) | WebSocket Hibernation live in-memory relay | **500+ concurrent active rooms** |
+| **Cloudflare D1 Database** | **5 GB storage · 100,000 writes/day** | Rate-limiting & admin audit logs (Chat stays in RAM) | **~100,000 room actions/day** |
+| **Neon Serverless Postgres** | **0.5 GB storage · 100 compute hrs/mo** | Hard-deleted auto-purged persistence for operator configs | **10,000+ daily queries** |
 | **Turso libSQL / SQLite** | **9 GB storage · 500 databases** | Multi-DB replication alternative | **1 Billion row reads/mo** |
 
-> **Summary**: Personal ya small team use ke liye ₹0 me aap thousands of rooms bana sakte hain aur bina kisi paid subscription ke unlimited E2EE chat kar sakte hain!
+> **Summary**: For personal or team use, you can create thousands of ephemeral rooms and exchange messages securely with zero operational cost (₹0) and no paid subscription.
 
 ## ⚙️ Analytics & Feedback Configuration (Environment Variables)
 

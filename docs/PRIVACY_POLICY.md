@@ -38,7 +38,7 @@ never reaches this server. It is encrypted in your browser before it is sent, an
 | Audit rows (event class + opaque id, e.g. `msg.shredded`) | security visibility, **no content** | rolling 30 days |
 | Invite `code_hash`, uses, expiry, role | invite-only signup | until revoked |
 | Room code `code_hash` (6-char, `ked_room_codes`), `maxUsers`, uses, expiry | ephemeral group join without pre-sharing DMs; codes are SHA-256 hashed, never plaintext | until expiry (≤30m) or consumed / revoked; `expiresAt` enforces hard cap |
-| Anon room codes — `ked_room_codes` with `createdBy = anon_xxx`, `ked_room_members` with `anon_xxx` ids | **FREE without login (bina login ke)** — 30m ephemeral rooms; `anonId` (`anon_<12>`) generated client-side in memory/session only, never in `ked_users`, never persisted | ≤30m; auto-purged on `expiresAt` or browser close; no persistent identity |
+| Anon room codes — `ked_room_codes` with `createdBy = anon_xxx`, `ked_room_members` with `anon_xxx` ids | **FREE without login (Zero-Login Mode)** — 30m ephemeral rooms; `anonId` (`anon_<12>`) generated client-side in memory/session only, never in `ked_users`, never persisted | ≤30m; auto-purged on `expiresAt` or browser close; no persistent identity |
 | System notice text | operational broadcast — **explicitly not E2EE** | until cleared |
 
 > **Anon users have no persistent identity:** an `anon_xxx` id lives only in `ked_room_codes`/`ked_room_members`/`ked_messages` + the browser's memory/`sessionStorage` for the tab lifetime. No `ked_users` row, no handle, no passphrase, no vault, no PBKDF2 verifier, no contact graph, no device record. Closing the tab discards `anonId` and local history; after `ttlMs` (≤30m) the relay shreds bodies and revokes codes. A new tab = a new `anon_xxx` with no link to the previous one.
@@ -82,7 +82,7 @@ Retention detail per data type: see **DATA-RETENTION.md**. Threat model and resi
 
 When you close or reload the tab, `src/app/page.tsx` `beforeunload` handler runs: `sessionStorage.clear()` (kills `ked.resume.v1` and `ked.admin.env`), and ephemeral room histories (`ttl <= 30m`) are wiped locally (`client.data.history[roomId] = []`). The page also shows a faint `repeating-linear-gradient` watermark (`src/app/globals.css:.watermark`) and blurs content while unfocused (`secret` class) so the back/forward cache reveals no plaintext. **Next open requires the full passphrase** — there is no cookie-based auto-login.
 
-## Free 30m rooms — no login (bina login ke) & 30m auto-burn ephemerals (code-rooms)
+## Free 30m rooms — Zero-Login Ephemeral Rooms & 30m Auto-Burn
 
 Anonymous users create ephemeral rooms **without any login**: `POST /api/ked/rooms/code {anonId, maxUsers, ttlMs}` and `POST /api/ked/rooms/join {code, anonId}` accept an `anonId` (`anon_<12>`, client-generated in memory/session, never in `ked_users`) as fallback when no `Authorization: Bearer` is present (`src/app/api/ked/[...slug]/route.ts:278,303`). `send` (`route.ts:322`) and `sync` (`route.ts:778`) accept the same fallback. Closing the tab discards `anonId` and wipes local history for that room.
 

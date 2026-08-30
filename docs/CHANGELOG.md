@@ -3,9 +3,15 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
-## [Unreleased] — 0.1.3 (extreme privacy rewrite, commit 9c95ee7)
-
+## [0.1.4] - 2026-08-30
 ### Added
+- **Pure Bilingual Support (English / शुद्ध हिन्दी)** — Strictly eliminated all Romanized Hinglish strings across UI, guide, modals, and documentation in favor of pure, idiomatic English and Hindi translations.
+- **Smart Room Code Auto-Detection** — Entering a 6-character room code (e.g. `cb34ce`) or pasting a direct link in the room creator automatically routes directly to joining that room instead of creating duplicate rooms.
+- **Hardcore E2EE 256-bit Link Fragment Key** — Link fragment key (`#k=...`) never touches the relay server, providing out-of-band authenticated symmetric encryption with client-only zero-knowledge guarantees.
+- **Hard Deletion & Auto-Vacuum Storage Optimization** — Expired ephemeral rooms, messages, tombstones, and sessions are immediately hard-deleted from Postgres/Neon to keep disk usage near 0 MB on free-tier limits.
+- **Automatic EXIF Metadata Stripping** — Uploaded images are stripped of GPS coordinates, camera models, and timestamps in client memory prior to encryption.
+- **Enhanced Privacy Shield & Panic Button** — Anti-snoop overlay, screenshot friction toast notifications, and 1-click instant panic purge (Esc key or 3 taps).
+- **Admin Real-time Active Rooms Filtering** — Admin overview and room monitors now filter strictly active unexpired records and run background auto-shredding on overview refresh.
 - **Public web + hidden admin** — web is public, `/admin` never linked. Dual gate: `POST /api/ked/admin/env-auth` (`src/app/api/ked/[...slug]/route.ts:464`) checks both `ADMIN_EMAIL` + `ADMIN_PASSWORD` (or `SHER_ADMIN_*`) from env (Cloudflare/Vercel Secrets) plus an admin invite bearer token for every `admin/*` route (`route.ts:522`). `src/app/admin/page.tsx` sessionStorage gate + `.env.example` docs.
 - **Public room codes (ephemeral, 30m)** — `POST /api/ked/rooms/code` (`route.ts:278`) creates an ephemeral `group` room (`maxUsers` 2-30, `ttlMs` 60k-30*60k **hard cap 30*60_000**) and mints a 6-char code into `ked_room_codes` (`src/server/store.ts` `RoomCodeRow`, DDL for `ked_room_codes`, `SqlStore` + `MemoryStore`). `POST /api/ked/rooms/join` (`route.ts:307`) consumes the code with `maxUsers` + `expiresAt` + `revokedAt` checks via `consumeRoomCode`.
 - **30m auto-burn ephemerals** — code-rooms carry `defaultTtl <=30m` (server enforces `Math.min`). `store.shredExpired()` (every `GET /sync`) nulls `body`, `KedClient.burnDue()` every **700ms** (`src/lib/client.ts`) zeroes local `HistMsg`. After 30m history is dead on both sides; ledger `message.burned` / `relay.shredded`.
