@@ -220,6 +220,9 @@ export default function Landing({
   relay: { adapter?: string; users?: number; ciphertextRows?: number } | null;
   onEnter: () => void;
 }) {
+  const [lang, setLang] = useState<"en" | "hi">(() => {
+    try { return (localStorage.getItem("ked.lang") as "en" | "hi") || "en"; } catch { return "en"; }
+  });
   return (
     <div className="relative z-[1] h-[100dvh] overflow-x-hidden overflow-y-auto scroll-smooth">
       {/* ---------------- nav */}
@@ -235,10 +238,10 @@ export default function Landing({
           </div>
           <nav className="row hidden gap-1 md:flex">
             <a className="btn btn-sm !border-transparent !bg-transparent" href="#features">
-              Features
+              {lang === "hi" ? "फीचर्स" : "Features"}
             </a>
             <a className="btn btn-sm !border-transparent !bg-transparent" href="#how">
-              How it works
+              {lang === "hi" ? "कैसे काम करता है" : "How it works"}
             </a>
             <a className="btn btn-sm" href="/guide">
               Guide
@@ -247,9 +250,14 @@ export default function Landing({
               Docs
             </a>
           </nav>
-          <button className="btn btn-primary btn-sm" onClick={onEnter}>
-            <Icon name="lock" size={13} /> Open the vault
-          </button>
+          <div className="row gap-1.5">
+            <button className="btn btn-sm" onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); try { localStorage.setItem("ked.lang", n); } catch {} }}>
+              {lang === "en" ? "हिंदी" : "EN"}
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={onEnter}>
+              <Icon name="lock" size={13} /> {lang === "hi" ? "वॉल्ट खोलें" : "Open the vault"}
+            </button>
+          </div>
         </div>
       </header>
 

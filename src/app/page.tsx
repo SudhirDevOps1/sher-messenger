@@ -42,6 +42,13 @@ export default function Page() {
   const [lastOpen, setLastOpen] = useState<Record<string, number>>({});
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const toastId = useRef(1);
+  const [lang, setLang] = useState<"en" | "hi">(() => {
+    try {
+      return (localStorage.getItem("ked.lang") as "en" | "hi") || "en";
+    } catch {
+      return "en";
+    }
+  });
 
   const toast = useCallback((msg: string, tone: "good" | "bad" = "good") => {
     const id = toastId.current++;
@@ -375,6 +382,17 @@ export default function Page() {
         </div>
 
         <div className="row gap-1.5">
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              const n = lang === "en" ? "hi" : "en";
+              setLang(n);
+              try { localStorage.setItem("ked.lang", n); } catch {}
+            }}
+            title="Switch language"
+          >
+            {lang === "en" ? "हिंदी" : "EN"}
+          </button>
           <button className="btn btn-sm" onClick={() => void summonSentry(client, true)} title="Boot / re-pair the local peer agent">
             <Icon name="ghost" size={13} /> <span className="hidden sm:inline">Sentry</span>
           </button>
