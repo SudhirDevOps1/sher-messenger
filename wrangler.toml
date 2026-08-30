@@ -16,19 +16,24 @@ binding = "ASSETS"
 
 [vars]
 BACKEND_TARGET = "workers"
-# ── Auto-visible Text variables (dashboard me Add ki zarurat nahi — bas Value bharo) ──
+# ── Auto-visible Text variables — Dashboard me Add ki zarurat nahi, bas Value bharo ──
+# Prod defaults (dashboard me jo Value bharoge wahi final, file ka default sirf first deploy ke liye)
 DB_TARGET = "postgres"
 SHER_DB = "postgres"
 STORE_TARGET = "b2"
 SHER_INVITE_ONLY = "1"
 SHER_RATE_LIMIT = "on"
-OPERATOR_EMAIL = "SudhirK926@gmail.com"
-ADMIN_EMAIL = ""
-ADMIN_PASSWORD = ""
-VAPID_SUBJECT = "mailto:SudhirK926@gmail.com"
-# ── Secrets (Encrypted) ko Dashboard > Add variable > Type Secret se bharo, yahan plain nahi ──
-# DATABASE_URL, B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
-# Inko `npx wrangler secret put <NAME>` se bhi dal sakte ho — toml me value nahi likhni
+OPERATOR_EMAIL = "admin@example.com"
+VAPID_SUBJECT = "mailto:admin@example.com"
+ADMIN_EMAIL = "admin@example.com"
+# ── Secrets (Encrypted) — Yahan FAKE placeholder, real value Dashboard > Add variable > Type Secret se bharo ──
+# Real credential kabhi toml me nahi — leak se bachne ko fake rakho, admin UI se PocketBase jaisa change kar sakte ho
+ADMIN_PASSWORD = "change-me-in-dashboard"
+SHER_BUILD_HASH = "dev"
+SHER_MAINTENANCE = ""
+# ── Secrets ko `npx wrangler secret put <NAME>` se bhi dal sakte ho — toml me plain nahi ──
+# Required Secrets (Encrypted): DATABASE_URL, B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+# Inke bina `postgres` dikhega par `readyz` 503 dega — dashboard me Secret bharo
 
 [observability]
 enabled = false
