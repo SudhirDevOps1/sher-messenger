@@ -11,6 +11,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "npx tsx --test tests/crypto.test.ts tests/storage-audit.test.ts tests/security-audit.test.ts",
+    "test:storage": "npx tsx --test tests/storage-audit.test.ts",
+    "test:security": "npx tsx --test tests/security-audit.test.ts",
+    "gate": "npm audit --production --audit-level=high && npm run lint && npm run typecheck && npm test && npm run build",
     "hash:pw": "npx tsx scripts/hash-pw.ts",
     "setup:auto": "npx tsx scripts/deploy-setup.ts",
     "deploy:oneclick": "npx tsx scripts/deploy-setup.ts --deploy"

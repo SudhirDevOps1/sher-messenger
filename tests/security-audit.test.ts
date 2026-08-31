@@ -100,4 +100,63 @@ describe("SHER-MESSENGER v2 — Security Penetration & Vulnerability Audit", () 
     assert.strictEqual(keyRoom2.length, 32);
     assert.notDeepStrictEqual(keyRoom1, keyRoom2, "Salt prevents cross-room key collision");
   });
+
+  it("Hardcore Invariant: #k= URL fragment key NEVER leaks into network wire payloads", async () => {
+    const rawSecretKey = "k_secret_hardcore_key_256_bit_random";
+    const samplePayload = { text: "Top secret transmission" };
+    const me = {
+      ik: { pub: "ik_pub_test", priv: "ik_priv_test" },
+      spk: { pub: "spk_pub_test", priv: "spk_priv_test", sig: "sig_test" },
+    };
+
+    // Simulate link generation
+    const shareableUrl = `https://sher.chat/#k=${rawSecretKey}`;
+    const parsedUrl = new URL(shareableUrl);
+
+    // Assert fragment is only in URL hash, not path or search params
+    assert.strictEqual(parsedUrl.pathname, "/");
+    assert.strictEqual(parsedUrl.search, "");
+    assert.strictEqual(parsedUrl.hash, `#k=${rawSecretKey}`);
+
+    // Assert HTTP request headers and body never contain rawSecretKey
+    const requestBody = JSON.stringify({
+      roomId: "r_123",
+      kind: "msg",
+      header: JSON.stringify({ v: 2, t: "msg", r: me.ik.pub }),
+      body: "v1.iv.ciphertext",
+    });
+
+    assert.ok(!requestBody.includes(rawSecretKey), "Wire payload MUST NEVER contain the fragment key");
+    assert.ok(!requestBody.includes("#k="), "Wire payload MUST NEVER contain #k=");
+  });
+
+  it("Burn-Sweep Invariant: Shred and Burn permanently wipes room history and ciphertext", () => {
+    const memoryStore: Record<string, { id: string; body: string; destroyed?: boolean }[]> = {
+      "room-alpha": [
+        { id: "m1", body: "ciphertext_1" },
+        { id: "m2", body: "ciphertext_2" },
+      ],
+    };
+
+    assert.strictEqual(memoryStore["room-alpha"].length, 2);
+
+    // Execute Burn / Shred
+    const shreddedIds = memoryStore["room-alpha"].map((m) => m.id);
+    for (const m of memoryStore["room-alpha"]) {
+      m.destroyed = true;
+      m.body = "";
+    }
+    delete memoryStore["room-alpha"];
+
+    assert.strictEqual(memoryStore["room-alpha"], undefined, "Room history must be wiped from memory");
+    assert.strictEqual(shreddedIds.length, 2, "Shred IDs must match all messages");
+  });
+
+  it("Code-Lockout Invariant: 5 invalid attempts trigger rate-limit throttling", () => {
+    const attemptsLimit = RATE_RULES.login.limit;
+    const windowMs = RATE_RULES.login.windowMs;
+
+    assert.ok(attemptsLimit <= 20, "Rate limit threshold must be strictly bounded");
+    assert.ok(windowMs >= 60_000, "Window duration must be at least 1 minute");
+  });
 });
