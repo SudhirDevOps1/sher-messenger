@@ -7,7 +7,7 @@ export type Lang = "en" | "hi";
 export const dict: Record<Lang, Record<string, string>> = {
   en: {
     // Navigation & Brand
-    appName: "SHER MESSENGER",
+    appName: "SHER Messenger",
     tagline: "ZERO-KNOWLEDGE EPHEMERAL MESSENGER",
     guide: "Guide",
     plan: "Docs",
