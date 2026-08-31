@@ -3,6 +3,43 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## [0.2.0](https://github.com/SudhirDevOps1/sher-messenger/compare/v0.1.3...v0.2.0) (2026-08-31)
+
+
+### Features
+
+* add DuckDuckGo fire burn animation, persistent room link chat, feedback modal & analytics ([b73de9e](https://github.com/SudhirDevOps1/sher-messenger/commit/b73de9e7c72c63f58b7f4025951332b3110c6ae9))
+* add PWA 1-click install, WebRTC audio/video calls, in-chat search, pinned messages, round video notes, and stealth calculator decoy mode ([b45d6e4](https://github.com/SudhirDevOps1/sher-messenger/commit/b45d6e42f5f356881c5e8727eecc81826ef49b73))
+* **chat:** add encrypted voice notes recording, waveform player, floating emoji reactions, and media lightbox ([ff883e0](https://github.com/SudhirDevOps1/sher-messenger/commit/ff883e01d368832f4a6b98bc507858973e0eb726))
+* complete SHER-MESSENGER v2 architecture, 1-click deploy, hardcore e2ee, and screenshot alerts ([f164f5c](https://github.com/SudhirDevOps1/sher-messenger/commit/f164f5c8ebdf6a02231a9a5ba0ce476184992728))
+* complete UI space expansion, admin endpoints fix, zero-telemetry by default, and docs update ([8fc573f](https://github.com/SudhirDevOps1/sher-messenger/commit/8fc573faa481f67166ef95004b1ef7b0db841601))
+* enhance deploy-setup with automatic wrangler D1/KV bindings injection and validation ([bc14ece](https://github.com/SudhirDevOps1/sher-messenger/commit/bc14ecee6eb5ea593d9ddf6f8a318d4cd37379b5))
+* **i18n:** strictly eliminate all Hinglish with clean pure English and Hindi across UI, guide, and docs ([29efe77](https://github.com/SudhirDevOps1/sher-messenger/commit/29efe77b9013ba84e3a0dbac7cf7b5d6dc2d0d6b))
+* place instant ephemeral chat directly in hero with clear UX, add quick switch on vault auth & full copyright notice ([25aed8f](https://github.com/SudhirDevOps1/sher-messenger/commit/25aed8f4b68591808e8e3186fe0132cf0b315892))
+* **release:** v0.1.5 - E2EE group calls with live ringing, zero vulnerabilities, and hardened outbox ([3baaa47](https://github.com/SudhirDevOps1/sher-messenger/commit/3baaa47579a82fa10dfd91cefac88c64d8234ece))
+* **security:** add automatic image EXIF metadata stripping, instant panic wipe button, and strict link protections ([da8f1c6](https://github.com/SudhirDevOps1/sher-messenger/commit/da8f1c6d7dd49b3f322741e5c95682a63af5d423))
+* **ui:** add live GitHub stars badge, enhanced screenshot & screen snip alert banner, and anti-snoop privacy shield ([f26570c](https://github.com/SudhirDevOps1/sher-messenger/commit/f26570c663a534cce8e6eadd040a921767ef89d4))
+* **ui:** complete mobile-first responsive redesign across all views and devices ([c734a24](https://github.com/SudhirDevOps1/sher-messenger/commit/c734a24e8e725cd73a3583efce0a2cf019a89820))
+* **ui:** enable anti-snoop privacy shield by default with localStorage persistence ([c071987](https://github.com/SudhirDevOps1/sher-messenger/commit/c071987a6e7543efd0891fc2895f9dd24fac906e))
+* zero-login 30m ephemeral rooms, pure English/Hindi i18n, direct admin portal & anti-screenshot protections ([76c2b75](https://github.com/SudhirDevOps1/sher-messenger/commit/76c2b7590a196350ae0632c380261bbfe6d04ce0))
+
+
+### Bug Fixes
+
+* **attachments:** resolve unauthorized error in guest rooms, add 5MB configurable limit and Backblaze B2 storage support ([831662e](https://github.com/SudhirDevOps1/sher-messenger/commit/831662e39355a67b1beb19eb6e6058e70753c0fe))
+* **calling,attachments:** enable selective group call joining and fix PDF/file viewing and downloading ([0e5102a](https://github.com/SudhirDevOps1/sher-messenger/commit/0e5102a852abc56c57a81fc5fcb75bc959fd133c))
+* **chat:** eliminate duplicate message bubbles on send and sync ([6aed6a5](https://github.com/SudhirDevOps1/sher-messenger/commit/6aed6a53b45367b6fa56b7b473b94d0820022a62))
+* **ci:** patch CycloneDX SBOM flags and add server-level HSTS & CSP headers to next.config.ts ([88b0c67](https://github.com/SudhirDevOps1/sher-messenger/commit/88b0c67e866a2409deffca93cc284a94998c39da))
+* **cloudflare:** preserve dashboard env across deploys, fix translation keys and CSP headers ([1622ce1](https://github.com/SudhirDevOps1/sher-messenger/commit/1622ce120c7a61a73846f5663e1e05a681147c05))
+* **db:** add Neon HTTP fetch driver for edge/Cloudflare to eliminate connection timeout ([844cb50](https://github.com/SudhirDevOps1/sher-messenger/commit/844cb50e547672a27cce6f83186c0306aa89cec5))
+* **db:** hard delete expired ephemeral rooms and filter active rooms and sessions in overview counts ([50dd4f0](https://github.com/SudhirDevOps1/sher-messenger/commit/50dd4f08e9711a3aac9433e2c9ab502d9feb0b5e))
+* **db:** implement hard deletion & automatic disk vacuum to keep Neon storage under free limits ([99541a2](https://github.com/SudhirDevOps1/sher-messenger/commit/99541a23876f0eab61104b7ffa012aae743dd6e1))
+* **landing:** auto-detect room code in input to join directly instead of creating duplicate rooms ([64a87b2](https://github.com/SudhirDevOps1/sher-messenger/commit/64a87b2038f969483c9c6a036b2337d3f475a40e))
+* remove all hardcoded fallback URLs and ensure 100% env-driven endpoints ([d0f1051](https://github.com/SudhirDevOps1/sher-messenger/commit/d0f1051ae7c2bf1846c58b8e680be77a2e5c7c0c))
+* resolve auto-burn infinite loop, enhance 3+ device group message key derivation, and optimize mobile responsive layout ([2df5fd8](https://github.com/SudhirDevOps1/sher-messenger/commit/2df5fd874cd8fb06243c65f8db617a3a95bfc760))
+* **security:** sanitize dummy env placeholders and update gitleaks allowlist ([b84cc9e](https://github.com/SudhirDevOps1/sher-messenger/commit/b84cc9e1fa72ddf93b7ee946d634c40ca49c8715))
+* **ui:** make 'Go to Chat Room' button accurately scroll to ephemeral room creator and focus input ([657242f](https://github.com/SudhirDevOps1/sher-messenger/commit/657242f9d4bb9ef551dd0ac2fdafa4cfec603b6f))
+
 ## [0.1.5] - 2026-08-31
 ### Added
 - **Configurable 5 MB File & Media Attachments** — Expanded default attachment limits from 2 MB to 5 MB with manual environment variable configuration (`MAX_FILE_SIZE_MB` and `NEXT_PUBLIC_MAX_FILE_SIZE_MB`).
