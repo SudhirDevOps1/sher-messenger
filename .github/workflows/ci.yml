@@ -68,7 +68,7 @@ jobs:
       - name: SBOM (CycloneDX)
         run: |
           npm i -g @cyclonedx/cyclonedx-npm
-          cyclonedx-npm --output-file sbom.json --output-format json
+          cyclonedx-npm --output-file sbom.json --output-format json --ignore-npm-errors --package-lock-only
       - uses: actions/upload-artifact@v4
         with: { name: sbom, path: sbom.json }
       - uses: actions/upload-artifact@v4
