@@ -502,7 +502,8 @@ export async function ephemeralEncrypt(
   fragKey?: string
 ): Promise<{ wire: OutMessage }> {
   const rKey = await resolveRoomKey({ key: fragKey, code, roomId });
-  const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${seq}`);
+  const senderKey = me.ik.pub;
+  const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `${senderKey}:${seq}`);
   const core: Omit<MsgHeader, "sig"> = {
     v: PROTOCOL_VERSION,
     t: "msg",
@@ -528,11 +529,22 @@ export async function ephemeralDecrypt(
 ): Promise<{ value: unknown; authenticated: boolean }> {
   const authenticated = await verifyHeader(header, body);
   const rKey = await resolveRoomKey({ key: fragKey, code, roomId });
-  const [, msgKey] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${header.n}`);
+  const senderKey = header.r || header.s || "";
   const env = unpackEnvelope(body, "ephemeral message body");
-  const plain = await openAead(msgKey, env, utf8(JSON.stringify(stripSig(header))));
-  const value = JSON.parse(new TextDecoder().decode(plain));
-  return { value, authenticated };
+  const aad = utf8(JSON.stringify(stripSig(header)));
+
+  // Try sender-scoped key first, then fallback to index-based key
+  try {
+    const [, msgKey1] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `${senderKey}:${header.n}`);
+    const plain1 = await openAead(msgKey1, env, aad);
+    const value1 = JSON.parse(new TextDecoder().decode(plain1));
+    return { value: value1, authenticated };
+  } catch {
+    const [, msgKey2] = await hkdf2(rKey, utf8(`SHER-EPH-MSG:${roomId}`), `m${header.n}`);
+    const plain2 = await openAead(msgKey2, env, aad);
+    const value2 = JSON.parse(new TextDecoder().decode(plain2));
+    return { value: value2, authenticated };
+  }
 }
 
 

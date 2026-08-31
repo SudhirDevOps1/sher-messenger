@@ -81,8 +81,12 @@ export const outbox = {
     await tx("readwrite", (s) => s.put({ ...entry, attempts: entry.attempts + 1, lastError: error.slice(0, 200) }));
   },
 
-  /** Give up after enough failures so a permanently broken room does not spin forever. */
+  /** Give up after enough failures or expiration so a permanently broken room does not spin forever. */
   shouldDrop(entry: OutboxEntry): boolean {
-    return entry.attempts >= 8 || (Date.now() - entry.queuedAt > 1000 * 60 * 60 * 24 * 7);
+    if (entry.ttlMs && Date.now() - entry.queuedAt > entry.ttlMs) return true;
+    return entry.attempts >= 4 || (Date.now() - entry.queuedAt > 1000 * 60 * 60 * 24 * 3);
+  },
+  async clear(): Promise<void> {
+    await tx("readwrite", (s) => s.clear());
   },
 };

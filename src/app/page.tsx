@@ -247,22 +247,34 @@ export default function Page() {
     };
     const onContext = (e: MouseEvent) => e.preventDefault();
     const onPrint = (e: KeyboardEvent) => {
-      if (e.key === "PrintScreen" || (e.ctrlKey && e.key.toLowerCase() === "p") || (e.metaKey && e.shiftKey && e.key === "S")) {
-        e.preventDefault();
-        toast("screenshot blocked — privacy first", "bad");
+      const k = (e.key || "").toLowerCase();
+      const c = (e.code || "").toLowerCase();
+      const codeNum = e.keyCode || e.which || 0;
+      if (
+        k === "printscreen" ||
+        k === "snapshot" ||
+        c === "printscreen" ||
+        codeNum === 44 ||
+        (e.ctrlKey && (k === "p" || c === "keyp")) ||
+        (e.shiftKey && (k === "s" || c === "keys") && (e.metaKey || e.ctrlKey || e.altKey)) ||
+        (e.altKey && (k === "printscreen" || c === "printscreen" || codeNum === 44))
+      ) {
+        toast(lang === "hi" ? "📸 स्क्रीनशॉट अवरुद्ध — गोपनीयता सर्वोपरि" : "📸 Screenshot blocked — privacy first", "bad");
       }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     document.addEventListener("copy", onCopy as unknown as EventListener);
     document.addEventListener("contextmenu", onContext as unknown as EventListener);
-    window.addEventListener("keydown", onPrint as unknown as EventListener);
+    window.addEventListener("keydown", onPrint as unknown as EventListener, true);
+    window.addEventListener("keyup", onPrint as unknown as EventListener, true);
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("copy", onCopy as unknown as EventListener);
       document.removeEventListener("contextmenu", onContext as unknown as EventListener);
-      window.removeEventListener("keydown", onPrint as unknown as EventListener);
+      window.removeEventListener("keydown", onPrint as unknown as EventListener, true);
+      window.removeEventListener("keyup", onPrint as unknown as EventListener, true);
     };
-  }, [client, toast]);
+  }, [client, toast, lang]);
 
   /* ---------------- auth */
 
@@ -599,12 +611,23 @@ export default function Page() {
           </span>
           {outboxN > 0 ? (
             <button
-              className="btn btn-sm flex-none"
+              className="btn btn-sm flex-none font-semibold !border-[rgba(255,190,85,.5)] !bg-[rgba(255,190,85,.2)]"
               onClick={() => {
-                void client.flushOutbox().then((n) => toast(n ? `${n} delivered` : "nothing to flush yet", n ? "good" : "bad"));
+                void client.flushOutbox().then((res) => {
+                  if (res.sent > 0) {
+                    toast(lang === "hi" ? `${res.sent} संदेश सफलतापूर्वक भेजे गए` : `${res.sent} message(s) delivered`, "good");
+                  } else if (res.dropped > 0) {
+                    toast(lang === "hi" ? `${res.dropped} अनुपलब्ध संदेश कतार से साफ़ किए गए` : `${res.dropped} unsendable/expired item(s) cleared`, "good");
+                  } else if (client.outboxCount === 0) {
+                    toast(lang === "hi" ? "आउटबॉक्स खाली है" : "Outbox is empty", "good");
+                  } else {
+                    toast(res.error || (lang === "hi" ? "फ्लश विफल — रिले से संपर्क नहीं" : "Flush failed — check relay connection"), "bad");
+                  }
+                  setOutboxN(client.outboxCount);
+                });
               }}
             >
-              <Icon name="refresh" size={12} /> flush now
+              <Icon name="refresh" size={12} /> {lang === "hi" ? "अभी भेजें (Flush)" : "flush now"}
             </button>
           ) : null}
         </div>

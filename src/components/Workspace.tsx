@@ -866,22 +866,30 @@ export function Chat({
   const typing = roomId ? (client.typingPeers[roomId] ?? 0) > now - 4500 : false;
   const lastInbound = list.filter((m) => !m.me).reduce((acc, m) => Math.max(acc, m.at), 0) || null;
 
+  const autoBurnedRef = useRef<boolean>(false);
+
   const handleBurnRoom = async () => {
     if (!roomId || burning) return;
     setBurning(true);
-    setBurnText("Incinerating & Shredding History...");
+    setBurnText(lang === "hi" ? "इतिहास नष्ट एवं भस्म किया जा रहा है..." : "Incinerating & Shredding History...");
     try {
       await client.burnRoom(roomId);
     } catch {}
     setTimeout(() => {
       setBurning(false);
-    }, 1700);
+    }, 1500);
   };
 
-  // Auto-burn when room duration or TTL expires
+  // Auto-burn when room duration or TTL expires (fires once only)
+  useEffect(() => {
+    autoBurnedRef.current = false;
+  }, [roomId]);
+
   useEffect(() => {
     if (!roomId) return;
-    if (client.roomExpiresAt && now >= client.roomExpiresAt) {
+    if (client.roomExpiresAt && now >= client.roomExpiresAt && !autoBurnedRef.current) {
+      autoBurnedRef.current = true;
+      client.roomExpiresAt = undefined;
       void handleBurnRoom();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -939,10 +947,15 @@ export function Chat({
     let lastAlert = 0;
     const notifyScreenshot = async (reason = "screen capture") => {
       const currentTime = Date.now();
-      if (currentTime - lastAlert < 3000) return; // debounce
+      if (currentTime - lastAlert < 2000) return; // debounce
       lastAlert = currentTime;
-      setScreenAlert(`📸 Screen capture attempt (${reason}) detected!`);
-      setTimeout(() => setScreenAlert(null), 4500);
+      const alertMsg = lang === "hi"
+        ? `📸 स्क्रीन कैप्चर प्रयास (${reason}) पहचाना गया — गोपनीयता सुरक्षित!`
+        : `📸 Screen capture attempt (${reason}) detected — content protected!`;
+      setScreenAlert(alertMsg);
+      setWindowBlurred(true);
+      setTimeout(() => setScreenAlert(null), 5000);
+      setTimeout(() => setWindowBlurred(false), 2500);
 
       try {
         client.ledger("privacy.screenshot", `Attempted ${reason} detected in room ${roomId.slice(0, 8)}`);
@@ -954,25 +967,38 @@ export function Chat({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key ? e.key.toLowerCase() : "";
+      const key = (e.key || "").toLowerCase();
+      const code = (e.code || "").toLowerCase();
+      const keyCode = e.keyCode || e.which || 0;
+
+      // PrintScreen, Windows Snipping (Win+Shift+S), Mac (Cmd+Shift+3/4/5), Browser screenshot/print (Ctrl+P, Ctrl+Shift+S)
       if (
         key === "printscreen" ||
         key === "snapshot" ||
-        (e.ctrlKey && key === "p") ||
-        (e.metaKey && e.shiftKey && (key === "3" || key === "4" || key === "5" || key === "s")) ||
-        (e.ctrlKey && e.shiftKey && (key === "s" || key === "c" || key === "i")) ||
-        (e.altKey && key === "printscreen") ||
-        key === "f12"
+        code === "printscreen" ||
+        keyCode === 44 ||
+        (e.ctrlKey && (key === "p" || code === "keyp")) ||
+        (e.ctrlKey && e.shiftKey && (key === "s" || code === "keys" || key === "c" || key === "i")) ||
+        (e.metaKey && e.shiftKey && (key === "s" || code === "keys" || key === "3" || key === "4" || key === "5")) ||
+        (e.shiftKey && (key === "s" || code === "keys") && (e.metaKey || e.ctrlKey || e.altKey)) ||
+        (e.altKey && (key === "printscreen" || code === "printscreen" || keyCode === 44)) ||
+        key === "f12" || code === "f12"
       ) {
-        void notifyScreenshot(key === "printscreen" ? "PrintScreen" : "screen-grab shortcut");
+        void notifyScreenshot(key.includes("print") || code.includes("print") || keyCode === 44 ? "PrintScreen" : "screen-grab shortcut");
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const key = e.key ? e.key.toLowerCase() : "";
-      if (key === "printscreen" || key === "snapshot") {
+      const key = (e.key || "").toLowerCase();
+      const code = (e.code || "").toLowerCase();
+      const keyCode = e.keyCode || e.which || 0;
+      if (key === "printscreen" || key === "snapshot" || code === "printscreen" || keyCode === 44) {
         void notifyScreenshot("PrintScreen");
       }
+    };
+
+    const handleBeforePrint = () => {
+      void notifyScreenshot("Print / Save as PDF");
     };
 
     const handleBlur = () => {
@@ -983,18 +1009,20 @@ export function Chat({
       setWindowBlurred(false);
     };
 
-    window.addEventListener("keyup", handleKeyUp);
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("beforeprint", handleBeforePrint);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
 
     return () => {
-      window.removeEventListener("keyup", handleKeyUp);
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp, true);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("beforeprint", handleBeforePrint);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [client, roomId]);
+  }, [client, roomId, lang]);
 
   if (!room)
     return (
@@ -1072,7 +1100,7 @@ export function Chat({
             </div>
           </div>
         </div>
-        <div className="row gap-1 sm:gap-1.5 shrink-0">
+        <div className="row gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar py-0.5 max-w-[60%] sm:max-w-none">
           <button
             className="btn btn-sm px-2 text-[var(--acc)] hover:!bg-[rgba(79,240,182,.12)]"
             title={lang === "hi" ? "P2P एन्क्रिप्टेड वॉइस कॉल" : "E2EE Voice Call"}
@@ -1354,8 +1382,8 @@ export function Chat({
             </>
           )}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="kicker">ttl</span>
+        <div className="mt-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <span className="kicker shrink-0">ttl</span>
           {[
             { l: "off", ms: null },
             { l: "30s", ms: 30_000 },
@@ -1370,7 +1398,7 @@ export function Chat({
                 setTtl(o.ms);
                 void client.setRoomTtl(room.id, o.ms);
               }}
-              className={`chip transition text-[11px] px-2 py-0.5 ${ttl === o.ms ? "!border-[rgba(79,240,182,.5)] !bg-[rgba(79,240,182,.14)] !text-[#a9ffe2]" : "hover:bg-white/5"}`}
+              className={`chip shrink-0 transition text-[11px] px-2 py-0.5 ${ttl === o.ms ? "!border-[rgba(79,240,182,.5)] !bg-[rgba(79,240,182,.14)] !text-[#a9ffe2]" : "hover:bg-white/5"}`}
             >
               {o.l}
             </button>

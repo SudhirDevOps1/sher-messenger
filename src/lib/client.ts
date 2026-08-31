@@ -1128,19 +1128,30 @@ export class KedClient {
   }
 
   /** Drain the offline outbox. Idempotent: ids are fixed at enqueue time. */
-  async flushOutbox(): Promise<number> {
+  async flushOutbox(): Promise<{ sent: number; dropped: number; error?: string }> {
     const pending = await outbox.all();
     let sent = 0;
+    let dropped = 0;
+    let lastErr = "";
     for (const entry of pending) {
       if (outbox.shouldDrop(entry)) {
         await outbox.remove(entry.id);
-        this.ledger("outbox.dropped", `${entry.id.slice(0, 10)} exceeded retry window`);
+        dropped++;
+        this.ledger("outbox.dropped", `${entry.id.slice(0, 10)} exceeded retry window or expired`);
         continue;
       }
       try {
         const res = await req<{ id: string; seq?: number; expiresAt?: string | null }>(this.token, "send", {
           method: "POST",
-          body: JSON.stringify({ id: entry.id, roomId: entry.roomId, kind: entry.kind, header: entry.header, body: entry.body, ttlMs: entry.ttlMs ?? undefined }),
+          body: JSON.stringify({
+            id: entry.id,
+            roomId: entry.roomId,
+            kind: entry.kind,
+            header: entry.header,
+            body: entry.body,
+            ttlMs: entry.ttlMs ?? undefined,
+            anonId: this.userId,
+          }),
         });
         await outbox.remove(entry.id);
         sent++;
@@ -1151,16 +1162,31 @@ export class KedClient {
           local.expiresAt = res.expiresAt ? Date.parse(res.expiresAt) : null;
         }
       } catch (e) {
-        await outbox.bumpAttempt(entry, (e as Error).message);
+        lastErr = (e as Error).message;
+        if (
+          lastErr.includes("room not found") ||
+          lastErr.includes("revoked") ||
+          lastErr.includes("expired") ||
+          lastErr.includes("unauthorised") ||
+          lastErr.includes("404") ||
+          lastErr.includes("400")
+        ) {
+          if (entry.attempts >= 1) {
+            await outbox.remove(entry.id);
+            dropped++;
+            continue;
+          }
+        }
+        await outbox.bumpAttempt(entry, lastErr);
       }
     }
     this.outboxCount = await outbox.count();
-    if (sent) {
-      this.ledger("outbox.flushed", `${sent} queued ciphertext row(s) delivered`);
+    if (sent || dropped) {
+      if (sent) this.ledger("outbox.flushed", `${sent} queued ciphertext row(s) delivered`);
       await this.persist();
       this.notify();
     }
-    return sent;
+    return { sent, dropped, error: lastErr };
   }
 
   async sendTyping(roomId: string) {
