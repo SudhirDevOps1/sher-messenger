@@ -28,6 +28,63 @@ function relTime(ms: number): string {
   return `last seen ${Math.round(s / 86_400)}d ago`;
 }
 
+class RingtonePlayer {
+  private ctx: AudioContext | null = null;
+  private timer: ReturnType<typeof setInterval> | null = null;
+
+  start() {
+    try {
+      const AudioCtx =
+        typeof window !== "undefined"
+          ? window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+          : null;
+      if (!AudioCtx) return;
+      this.ctx = new AudioCtx();
+      const playChime = () => {
+        if (!this.ctx || this.ctx.state === "closed") return;
+        if (this.ctx.state === "suspended") void this.ctx.resume();
+        const now = this.ctx.currentTime;
+        const osc1 = this.ctx.createOscillator();
+        const gain1 = this.ctx.createGain();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(440, now);
+        gain1.gain.setValueAtTime(0.12, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc1.connect(gain1);
+        gain1.connect(this.ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(587.33, now + 0.15);
+        gain2.gain.setValueAtTime(0.12, now + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc2.connect(gain2);
+        gain2.connect(this.ctx.destination);
+        osc2.start(now + 0.15);
+        osc2.stop(now + 0.5);
+      };
+      playChime();
+      this.timer = setInterval(playChime, 1900);
+    } catch {}
+  }
+
+  stop() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    if (this.ctx && this.ctx.state !== "closed") {
+      try {
+        void this.ctx.close();
+      } catch {}
+      this.ctx = null;
+    }
+  }
+}
+
 function Rich({ text }: { text: string }) {
   const parts = text.split(/(https?:\/\/[^\s]+)/g);
   return (
@@ -928,6 +985,52 @@ export function Chat({
   const [screenAlert, setScreenAlert] = useState<string | null>(null);
   const [windowBlurred, setWindowBlurred] = useState(false);
   const [callSession, setCallSession] = useState<CallSession | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{
+    roomId: string;
+    callId: string;
+    callerName: string;
+    callerId: string;
+    isVideo: boolean;
+    sdp?: string;
+  } | null>(null);
+
+  const ringtoneRef = useRef<RingtonePlayer | null>(null);
+
+  useEffect(() => {
+    if (!ringtoneRef.current && typeof window !== "undefined") {
+      ringtoneRef.current = new RingtonePlayer();
+    }
+  }, []);
+
+  // Listen for incoming group or 1-on-1 call invites in real-time
+  useEffect(() => {
+    if (callSession) return;
+
+    client.onCallSignal = (sigRoomId, signal, fromUserId) => {
+      if (signal.action === "invite") {
+        const callerName = String(signal.callerName || client.data.contacts[fromUserId]?.username || "Member");
+        setIncomingCall({
+          roomId: sigRoomId,
+          callId: String(signal.callId || `call_${Date.now()}`),
+          callerName,
+          callerId: fromUserId,
+          isVideo: Boolean(signal.isVideo),
+          sdp: signal.sdp ? String(signal.sdp) : undefined,
+        });
+        ringtoneRef.current?.start();
+      } else if (signal.action === "hangup" || signal.action === "decline") {
+        ringtoneRef.current?.stop();
+        setIncomingCall(null);
+      }
+    };
+
+    return () => {
+      if (!callSession) {
+        client.onCallSignal = undefined;
+      }
+    };
+  }, [client, callSession]);
+
   const [stealthDecoy, setStealthDecoy] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1208,6 +1311,56 @@ export function Chat({
           >
             <Icon name="x" size={11} />
           </button>
+        </div>
+      ) : null}
+
+      {incomingCall ? (
+        <div className="mx-3 sm:mx-4 mt-2 row items-center justify-between gap-3 rounded-2xl border-2 border-[var(--acc)] bg-[#0b1320]/95 px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-pulse z-30">
+          <div className="row items-center gap-3 min-w-0">
+            <div className="relative grid h-10 w-10 flex-none place-items-center rounded-full bg-[rgba(79,240,182,.15)] text-[var(--acc)]">
+              <Icon name={incomingCall.isVideo ? "video" : "phone"} size={18} />
+              <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 animate-ping" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="truncate text-xs font-bold text-white">
+                {incomingCall.isVideo ? (lang === "hi" ? "आने वाली वीडियो कॉल" : "Incoming Video Call") : (lang === "hi" ? "आने वाली वॉइस कॉल" : "Incoming Voice Call")}
+              </h4>
+              <p className="truncate text-[11px] text-[var(--acc)]">
+                @{incomingCall.callerName} {lang === "hi" ? "कॉल कर रहे हैं..." : "is calling..."}
+              </p>
+            </div>
+          </div>
+          <div className="row gap-2 flex-none">
+            <button
+              className="grid h-9 w-9 place-items-center rounded-full bg-red-600 text-white shadow-md hover:bg-red-500 active:scale-95 transition-all"
+              title={lang === "hi" ? "अस्वीकार करें (Decline)" : "Decline Call"}
+              onClick={() => {
+                ringtoneRef.current?.stop();
+                void client.sendCallSignal(incomingCall.roomId, { action: "decline", callId: incomingCall.callId, peerId: client.userId });
+                setIncomingCall(null);
+              }}
+            >
+              <Icon name="x" size={16} />
+            </button>
+            <button
+              className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-white shadow-md hover:bg-emerald-400 active:scale-95 transition-all"
+              title={lang === "hi" ? "स्वीकार करें (Accept)" : "Accept Call"}
+              onClick={() => {
+                ringtoneRef.current?.stop();
+                setCallSession({
+                  roomId: incomingCall.roomId,
+                  peerName: incomingCall.callerName,
+                  isVideo: incomingCall.isVideo,
+                  callId: incomingCall.callId,
+                  isIncoming: true,
+                  initialSdp: incomingCall.sdp,
+                });
+                setIncomingCall(null);
+              }}
+            >
+              <Icon name="phone" size={16} />
+            </button>
+          </div>
         </div>
       ) : null}
 

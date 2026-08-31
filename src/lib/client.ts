@@ -303,6 +303,7 @@ export class KedClient {
   attachmentCache = new Map<string, string>();
   outboxCount = 0;
   onInbound?: (item: RelayItem, value: Record<string, unknown>) => Promise<void>;
+  onCallSignal?: (roomId: string, signal: Record<string, unknown>, fromUserId: string) => void;
   online = true;
 
   subscribe(fn: () => void): () => void {
@@ -816,6 +817,12 @@ export class KedClient {
       await this.onInbound(item, value);
       return;
     }
+    if (t === "call-signal") {
+      if (!mine && this.onCallSignal) {
+        this.onCallSignal(item.roomId, value as Record<string, unknown>, item.senderId);
+      }
+      return;
+    }
 
     const history = this.data.history[item.roomId] ?? [];
     const existingIndex = history.findIndex((m) => m.id === item.id);
@@ -1232,6 +1239,10 @@ export class KedClient {
     this.ledger("message.recalled", `${targetId.slice(0, 10)} · shred requested on relay, local copy zeroed`);
     await this.persist();
     this.notify();
+  }
+
+  async sendCallSignal(roomId: string, signal: Record<string, unknown>) {
+    await this.createRoomMessage(roomId, "control", { t: "call-signal", ...signal }, 30_000).catch(() => undefined);
   }
 
   async burnRoom(roomId: string) {

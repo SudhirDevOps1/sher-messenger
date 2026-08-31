@@ -8,7 +8,9 @@ export interface CallSession {
   roomId: string;
   peerName: string;
   isVideo: boolean;
+  callId?: string;
   isIncoming?: boolean;
+  initialSdp?: string;
 }
 
 const ICE_SERVERS: RTCConfiguration = {
@@ -30,7 +32,9 @@ export function CallModal({
   onClose: () => void;
   lang: string;
 }) {
-  const [status, setStatus] = useState<"calling" | "ringing" | "connected" | "ended">("calling");
+  const [status, setStatus] = useState<"calling" | "ringing" | "connected" | "ended">(
+    session.isIncoming ? "ringing" : "calling"
+  );
   const [micMuted, setMicMuted] = useState(false);
   const [camOff, setCamOff] = useState(!session.isVideo);
   const [duration, setDuration] = useState(0);
@@ -40,9 +44,13 @@ export function CallModal({
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callIdRef = useRef<string>(
+    session.callId || `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  );
 
   useEffect(() => {
     let active = true;
+    const callId = callIdRef.current;
 
     async function initMediaAndCall() {
       try {
@@ -73,30 +81,96 @@ export function CallModal({
           }
         };
 
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            void client.sendCallSignal(session.roomId, {
+              action: "ice",
+              callId,
+              candidate: event.candidate.toJSON(),
+              senderId: client.userId,
+            });
+          }
+        };
+
         pc.oniceconnectionstatechange = () => {
-          if (pc.iceConnectionState === "connected") {
+          if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
             setStatus("connected");
           } else if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
             setStatus("ended");
           }
         };
 
+        // Wire up signaling listener
+        client.onCallSignal = async (roomId, signal) => {
+          if (roomId !== session.roomId || signal.callId !== callId) return;
+
+          if (signal.action === "answer" && signal.sdp && !session.isIncoming) {
+            try {
+              await pc.setRemoteDescription(
+                new RTCSessionDescription({ type: "answer", sdp: String(signal.sdp) })
+              );
+              setStatus("connected");
+            } catch {}
+          } else if (signal.action === "offer" && signal.sdp && session.isIncoming) {
+            try {
+              await pc.setRemoteDescription(
+                new RTCSessionDescription({ type: "offer", sdp: String(signal.sdp) })
+              );
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              void client.sendCallSignal(session.roomId, {
+                action: "answer",
+                callId,
+                sdp: answer.sdp,
+                responderId: client.userId,
+              });
+              setStatus("connected");
+            } catch {}
+          } else if (signal.action === "ice" && signal.candidate) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate as RTCIceCandidateInit));
+            } catch {}
+          } else if (signal.action === "hangup" || signal.action === "decline") {
+            setStatus("ended");
+          }
+        };
+
         if (session.isIncoming) {
-          setStatus("ringing");
+          if (session.initialSdp) {
+            await pc.setRemoteDescription(
+              new RTCSessionDescription({ type: "offer", sdp: session.initialSdp })
+            );
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            void client.sendCallSignal(session.roomId, {
+              action: "answer",
+              callId,
+              sdp: answer.sdp,
+              responderId: client.userId,
+            });
+            setStatus("connected");
+          } else {
+            // Signal join to prompt offer
+            void client.sendCallSignal(session.roomId, {
+              action: "join",
+              callId,
+              responderId: client.userId,
+            });
+          }
         } else {
+          // Caller creates offer
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
 
-          void client.send({
-            roomId: session.roomId,
-            text: session.isVideo ? "📞 [Encrypted Video Call Started]" : "📞 [Encrypted Voice Call Started]",
-          }).catch(() => {});
-
-          setTimeout(() => {
-            if (active && status !== "connected") {
-              setStatus("connected");
-            }
-          }, 1500);
+          // Broadcast Call Invite to all room members
+          void client.sendCallSignal(session.roomId, {
+            action: "invite",
+            callId,
+            isVideo: session.isVideo,
+            callerId: client.userId,
+            callerName: client.username || "Member",
+            sdp: offer.sdp,
+          });
         }
       } catch {
         setStatus("ended");
@@ -107,6 +181,7 @@ export function CallModal({
 
     return () => {
       active = false;
+      client.onCallSignal = undefined;
       if (timerRef.current) clearInterval(timerRef.current);
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -148,6 +223,11 @@ export function CallModal({
 
   const endCall = () => {
     setStatus("ended");
+    void client.sendCallSignal(session.roomId, {
+      action: "hangup",
+      callId: callIdRef.current,
+      senderId: client.userId,
+    });
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop());
     }
@@ -176,7 +256,7 @@ export function CallModal({
                 {session.isVideo ? (lang === "hi" ? "एन्क्रिप्टेड वीडियो कॉल" : "E2EE Video Call") : (lang === "hi" ? "एन्क्रिप्टेड वॉइस कॉल" : "E2EE Voice Call")}
               </h3>
               <p className="mono text-[10px] text-[var(--acc)]">
-                {status === "connected" ? `🔒 P2P Encrypted · ${fmtTime(duration)}` : status === "calling" ? (lang === "hi" ? "कनेक्ट हो रहा है..." : "Connecting P2P...") : (lang === "hi" ? "कॉल समाप्त" : "Call ended")}
+                {status === "connected" ? `🔒 P2P Encrypted · ${fmtTime(duration)}` : status === "calling" ? (lang === "hi" ? "अन्य सदस्यों को रिंग हो रहा है..." : "Ringing room members...") : (lang === "hi" ? "कॉल समाप्त" : "Call ended")}
               </p>
             </div>
           </div>
@@ -212,12 +292,12 @@ export function CallModal({
           ) : (
             <div className="flex flex-col items-center justify-center space-y-4 py-8">
               <div className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 border-[var(--acc)] bg-[rgba(79,240,182,.1)] shadow-[0_0_35px_rgba(79,240,182,.25)] animate-pulse">
-                <Icon name="shield" size={40} className="text-[var(--acc)]" />
+                <Icon name="phone" size={40} className="text-[var(--acc)]" />
               </div>
               <div className="text-center">
                 <h4 className="text-lg font-bold text-white">@{session.peerName}</h4>
                 <p className="mono text-xs text-white/50 mt-1">
-                  {status === "connected" ? fmtTime(duration) : (lang === "hi" ? "सुरक्षित वॉइस सिग्नल..." : "Direct P2P Encrypted Audio")}
+                  {status === "connected" ? fmtTime(duration) : (lang === "hi" ? "P2P एन्क्रिप्टेड वॉइस सिग्नल..." : "Direct P2P Encrypted Audio")}
                 </p>
               </div>
             </div>
@@ -241,7 +321,7 @@ export function CallModal({
               className={`grid h-12 w-12 place-items-center rounded-full border transition-all ${camOff ? "border-red-500 bg-red-500/20 text-red-300" : "border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
               title={camOff ? "Turn Camera On" : "Turn Camera Off"}
             >
-              <Icon name="eye" size={20} />
+              <Icon name="camera" size={20} />
             </button>
           )}
 
