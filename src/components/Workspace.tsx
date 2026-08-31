@@ -289,6 +289,7 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
   const isImage = att?.mime.startsWith("image/") ?? false;
   const isAudio = att?.mime.startsWith("audio/") ?? false;
   const isVideo = att?.mime.startsWith("video/") ?? false;
+  const isPdf = att?.mime === "application/pdf" || att?.name.toLowerCase().endsWith(".pdf") || false;
 
   useEffect(() => {
     if (!att) return;
@@ -296,14 +297,14 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
     if (cached) {
       setUrl(cached);
       setOpen(true);
-    } else if (isAudio || isImage || isVideo) {
-      // auto-load voice notes, images & video notes
+    } else if (isAudio || isImage || isVideo || isPdf) {
+      // auto-load voice notes, images, video notes & pdfs
       void client.loadAttachment(att, msg.roomId).then((u) => {
         setUrl(u);
         setOpen(true);
       }).catch(() => {});
     }
-  }, [att, client, isImage, isAudio, isVideo, msg.roomId]);
+  }, [att, client, isImage, isAudio, isVideo, isPdf, msg.roomId]);
 
   if (!att) return null;
   const load = async () => {
@@ -343,28 +344,48 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
         </div>
       ) : (
         <div className="row items-center justify-between gap-3 px-3 py-2.5">
-          <span className="row min-w-0">
-            <Icon name={isAudio ? "volume" : "doc"} size={16} />
+          <span className="row min-w-0 gap-2.5">
+            <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-white/10 text-[var(--acc)]">
+              <Icon name="doc" size={16} />
+            </span>
             <span className="min-w-0">
-              <span className="block truncate text-[12.5px] font-semibold">{att.name}</span>
+              <span className="block truncate text-[12.5px] font-semibold text-white">{att.name}</span>
               <span className="mono block text-[10px] text-[var(--ink-faint)]">
-                {fmtBytes(att.size)} · {att.mime} · sealed with a one-time AES key
+                {fmtBytes(att.size)} · {isPdf ? "PDF Document" : att.mime} · E2EE
               </span>
             </span>
           </span>
-          <button className="btn btn-sm" onClick={load} type="button">
-            <Icon name={open ? "eyeoff" : "eye"} size={13} /> {open ? "re-decrypt" : "open"}
+          <button className="btn btn-sm flex-none" onClick={load} type="button">
+            <Icon name={open ? "refresh" : "eye"} size={13} /> {open ? "re-decrypt" : "open"}
           </button>
         </div>
       )}
-      {url && isImage && open ? (
-        <div className="row justify-between border-t border-[var(--line)] px-3 py-1.5 text-[10.5px]">
-          <span className="mono text-[var(--acc)]">✓ E2EE decrypted blob</span>
-          <a className="mono text-[var(--acc-2)] hover:underline" href={url} download={att.name}>
-            Save decrypted copy ➔
-          </a>
+
+      {url ? (
+        <div className="row items-center justify-between border-t border-[var(--line)] bg-black/40 px-3 py-2 text-[11px] flex-wrap gap-2">
+          <span className="mono text-[var(--acc)] text-[10.5px]">✓ Decrypted in browser</span>
+          <div className="row gap-2">
+            {isPdf ? (
+              <a
+                className="btn btn-sm !py-0.5 !px-2 text-[var(--acc-2)] hover:underline font-semibold"
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                📄 View PDF ➔
+              </a>
+            ) : null}
+            <a
+              className="btn btn-sm btn-primary !py-0.5 !px-2 font-semibold"
+              href={url}
+              download={att.name}
+            >
+              ⬇ Save File
+            </a>
+          </div>
         </div>
       ) : null}
+
       {err ? <div className="mono border-t border-[rgba(255,107,122,.3)] px-3 py-2 text-[10.5px] text-[#ffc2c9]">{err}</div> : null}
 
       {lightbox && url ? (
@@ -1018,7 +1039,7 @@ export function Chat({
           sdp: signal.sdp ? String(signal.sdp) : undefined,
         });
         ringtoneRef.current?.start();
-      } else if (signal.action === "hangup" || signal.action === "decline") {
+      } else if (signal.action === "end_all") {
         ringtoneRef.current?.stop();
         setIncomingCall(null);
       }
@@ -1336,7 +1357,6 @@ export function Chat({
               title={lang === "hi" ? "अस्वीकार करें (Decline)" : "Decline Call"}
               onClick={() => {
                 ringtoneRef.current?.stop();
-                void client.sendCallSignal(incomingCall.roomId, { action: "decline", callId: incomingCall.callId, peerId: client.userId });
                 setIncomingCall(null);
               }}
             >

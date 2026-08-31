@@ -130,7 +130,7 @@ export function CallModal({
             try {
               await pc.addIceCandidate(new RTCIceCandidate(signal.candidate as RTCIceCandidateInit));
             } catch {}
-          } else if (signal.action === "hangup" || signal.action === "decline") {
+          } else if (signal.action === "end_all") {
             setStatus("ended");
           }
         };
@@ -224,7 +224,7 @@ export function CallModal({
   const endCall = () => {
     setStatus("ended");
     void client.sendCallSignal(session.roomId, {
-      action: "hangup",
+      action: "leave",
       callId: callIdRef.current,
       senderId: client.userId,
     });
