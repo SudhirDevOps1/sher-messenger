@@ -170,7 +170,7 @@ export default function GuidePage() {
               <Icon name="shield" size={16} />
             </span>
             <span className="text-[13px] sm:text-[13.5px] font-bold tracking-tight">
-              SHER<span className="text-[var(--acc)]">·</span>VAULT
+              SHER<span className="text-[var(--acc)]">·</span>MESSENGER
               <span className="mono ml-2 text-[10px] font-normal text-[var(--ink-faint)]">
                 {lang === "hi" ? "दस्तावेज़" : "Guide"}
               </span>

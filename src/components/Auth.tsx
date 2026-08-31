@@ -93,7 +93,7 @@ export default function Auth({
             </span>
             <div>
               <div className="text-[18px] sm:text-[20px] font-bold leading-none tracking-tight">
-                SHER<span className="text-[var(--acc)]">·</span>VAULT
+                SHER<span className="text-[var(--acc)]">·</span>MESSENGER
               </div>
               <div className="kicker mt-1.5">personal zero-knowledge messenger</div>
             </div>

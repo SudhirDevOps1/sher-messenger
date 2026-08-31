@@ -495,7 +495,7 @@ export default function Landing({
               <Icon name="shield" size={16} />
             </span>
             <span className="text-[13px] sm:text-[13.5px] font-bold tracking-tight">
-              SHER<span className="text-[var(--acc)]">·</span>VAULT
+              SHER<span className="text-[var(--acc)]">·</span>MESSENGER
             </span>
           </div>
           <nav className="row hidden gap-1 md:flex">

@@ -101,7 +101,7 @@ export default function Plan() {
               <Icon name="shield" size={16} />
             </span>
             <span className="text-[13px] sm:text-[13.5px] font-bold tracking-tight">
-              SHER<span className="text-[var(--acc)]">·</span>VAULT <span className="kicker ml-1 hidden sm:inline">/ live plan + PRD</span>
+              SHER<span className="text-[var(--acc)]">·</span>MESSENGER <span className="kicker ml-1 hidden sm:inline">/ live plan + PRD</span>
             </span>
           </a>
           <div className="row gap-1.5 overflow-x-auto no-scrollbar flex-nowrap shrink-0 py-0.5">
