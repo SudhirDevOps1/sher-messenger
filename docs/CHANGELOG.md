@@ -5,17 +5,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versio
 
 ## [0.1.5] - 2026-08-31
 ### Added
-- **Configurable 5 MB File & Media Attachments** — Expanded default attachment limits from 2 MB to 5 MB with manual environment variable configuration (`MAX_FILE_SIZE_MB` and `NEXT_PUBLIC_MAX_FILE_SIZE_MB`).
+- **Group WebRTC Calling with Live Ringing & Selective Join/Leave** — WhatsApp/Signal-style incoming call ringing banner, dual-tone Web Audio chime (`440Hz ➔ 587Hz`), and independent participant join/leave (one person leaving or declining does not terminate the call for other joined peers).
+- **In-Browser Decrypted PDF Viewer & File Actions** — Instant client-side decryption of PDFs and documents with direct **"📄 View PDF ➔"** sandboxed tab viewer, **"⬇ Save File"**, and image lightbox zoom.
+- **Active Room Refresh & Session Persistence (F5 Safe)** — Synchronized room code and secret keys via `sessionStorage` and URL hash (`/?room=<code>#k=<key>`), ensuring page reloads preserve active chat sessions without kicking users out.
+- **Stealth Decoy Working Calculator Mode** — Emergency camouflage panic button converting the entire interface into a functional arithmetic calculator, unlocked exclusively with secret PIN (`1337 =`).
+- **SHER-GATE Automated 16-Test Invariant Suite** — Complete cryptographic verification suite covering `#k=` network-sniff isolation, post-burn shredding sweeps, brute-force rate lockouts, zero-sensitive `localStorage` audits, and AEAD tag integrity.
+- **Server-Level HSTS & Security Headers** — Injected `Strict-Transport-Security` (`max-age=63072000; includeSubDomains; preload`), `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY` via `next.config.ts`.
 - **Zero-Dependency S3 / Backblaze B2 Storage Adapter** — Implemented zero-dependency AWS SigV4 storage module (`src/server/storage.ts`) supporting Backblaze B2, Cloudflare R2, and AWS S3 with automatic Postgres/SQLite zero-config fallback.
-- **Guest Ephemeral Room Attachment Auth Fix** — Fixed `401 unauthorised` on attachment uploads in link-fragment (`#k=`) and ephemeral guest rooms by authorizing `anonId` against room membership.
-- **In-Browser Encrypted Voice Notes** — In-browser audio recording via `MediaRecorder` with live pulse timer, animated soundwave visualizer, duration timer, and speed multiplier (`1x`, `1.5x`, `2x`).
-- **Circular Front-Camera Round Video Notes** — Telegram/WhatsApp-style front-camera 15–30s circular video bubbles encrypted client-side with AES-256-GCM before upload.
-- **P2P End-to-End Encrypted WebRTC Audio & Video Calling** — Direct browser-to-browser WebRTC voice and video calls with mute, camera toggle, and in-room encrypted signaling.
-- **In-Chat Real-Time Memory Search** — Client-side in-memory search across active room messages with live match count and scroll-to-highlight, leaving zero traces on the server.
-- **Pinned Messages System** — Ability to pin key messages to the top of any room with quick jump-to-message navigation.
-- **Stealth Decoy Working Calculator Mode** — Emergency camouflage panic button converting the interface into a functional arithmetic calculator, unlocked exclusively with a secret PIN (`1337`).
-- **1-Click PWA App Installation** — Header install button with `beforeinstallprompt` support for native Android/iPhone/Desktop app installation and offline shell caching.
-- **Automated Security Penetration & Tamper Resistance Test Suite** — Comprehensive 13-test automated test suite (`tests/security-audit.test.ts`) validating AEAD tag verification, context isolation, replay rejection, rate limiting, and memory zeroization.
+- **Configurable 5 MB File & Media Attachments** — Expanded default attachment limits from 2 MB to 5 MB with environment variable configuration (`MAX_FILE_SIZE_MB` and `NEXT_PUBLIC_MAX_FILE_SIZE_MB`).
+- **In-Browser Encrypted Voice Notes & Video Bubbles** — Audio recording via `MediaRecorder` with live waveform visualizer and 15–30s circular front-camera video notes encrypted client-side with AES-256-GCM.
+- **In-Chat Real-Time Memory Search & Pinned Messages** — Client-side in-memory search across active room messages and top-pinned messages.
+- **Zero Dependency Vulnerabilities** — `npm audit` returns 0 vulnerabilities across all dependencies.
 
 ## [0.1.4] - 2026-08-30
 ### Added

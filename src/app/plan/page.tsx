@@ -257,11 +257,12 @@ export default function Plan() {
                 rows={[
                   ["Identity", "handle + passphrase → PBKDF2 vault key; identity bundle; fingerprint; rotation with safety-number change banner", "SRP-6a PAKE (no server-side verifier), Argon2id WASM, WebAuthn device bound keys"],
                   ["1:1 chat", "X3DH-lite, Double Ratchet, edit, unsend, reactions, replies, read receipts, typing, TTL burn, search, day separators", "Out-of-order skipped-key expansion, message pagination, offline queue"],
-                  ["Groups", "creator-distributed sender keys per member, re-key on membership change, per-group TTL", "MLS (RFC 9420) TreeKEM for large groups, member roles, hidden members"],
-                  ["Files", "AES-GCM one-time key, 2 MB cap, image preview via blob:, SHA-256 verification on open", "chunked uploads, IPFS/WebTorrent P2P relay for large media, streaming decrypt"],
-                  ["Safety UI", "Inspector (identity/session/ledger/devices/hardening), posture score, seal-details per message, blur-on-blur, clipboard wipe", "QR safety-number scan, key-change banner modal, screenshot counter"],
-                  ["Data", "encrypted local vault in localStorage; mirrored encrypted blob on relay for device portability; encrypted export", "IndexedDB + OPFS store, delta sync of vault, per-device history split"],
-                  ["Ops", "/api/ked/stats visibility, per-route token buckets, relay audit ledger, health probe", "Prometheus endpoint, OpenTelemetry-free log scrubbing, backup rotation"],
+                  ["Groups", "creator-distributed sender keys per member, re-key on membership change, sender-scoped HKDF key derivation (${senderKey}:${seq}), per-group TTL", "MLS (RFC 9420) TreeKEM for large groups, member roles, hidden members"],
+                  ["Calling", "P2P & Group E2EE WebRTC voice & video calls, Web Audio chime ringtone, live incoming ringing banner, selective join/leave", "SFU mesh for 50+ participants, screen sharing stream, noise suppression"],
+                  ["Files & Media", "AES-GCM one-time key, 5 MB cap, S3/B2/R2 SigV4 storage adapter, direct PDF viewer & download, image lightbox, voice notes (1x, 1.5x, 2x), round video notes", "chunked uploads, IPFS/WebTorrent P2P relay for large media, streaming decrypt"],
+                  ["Safety & Stealth", "Stealth working calculator decoy (PIN 1337 = unlock), Inspector (identity/session/ledger/devices), posture score, anti-capture blur, clipboard wipe, F5-safe room persistence", "QR safety-number scan, key-change banner modal, screenshot counter"],
+                  ["Data", "zero-sensitive localStorage schema; tab sessionStorage sync; memory-only ephemeral history; encrypted export; 16-test SHER-GATE suite", "IndexedDB + OPFS store, delta sync of vault, per-device history split"],
+                  ["Ops", "/api/ked/stats visibility, per-route token buckets, relay audit ledger, health probe, server-level HSTS & CSP headers", "Prometheus endpoint, OpenTelemetry-free log scrubbing, backup rotation"],
                 ]}
               />
               <div className="grid gap-3 sm:grid-cols-2">

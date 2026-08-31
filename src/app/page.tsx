@@ -107,8 +107,23 @@ export default function Page() {
       try {
         const sp = new URLSearchParams(location.search);
         const p = sp.get("invite");
-        const roomParam = sp.get("room") || sp.get("join");
+        let roomParam = sp.get("room") || sp.get("join");
         const hashKey = location.hash.includes("k=") ? location.hash.replace("#k=", "") : "";
+
+        let guestSaved: { code?: string; key?: string; username?: string; roomId?: string } | null = null;
+        try {
+          const raw = sessionStorage.getItem("ked.guest_session");
+          if (raw) guestSaved = JSON.parse(raw);
+        } catch {
+          /* ignore */
+        }
+
+        if (!roomParam && guestSaved?.code) {
+          roomParam = guestSaved.code;
+        }
+
+        const effectiveKey = hashKey || guestSaved?.key || "";
+        const effectiveName = guestSaved?.username || (lang === "hi" ? "अतिथि" : "Guest");
 
         if (p) {
           setInviteCode(p);
@@ -125,19 +140,38 @@ export default function Page() {
         if (roomParam) {
           try {
             const res = await KedClient.joinGuestRoom({
-              displayName: "Guest",
+              displayName: effectiveName,
               code: roomParam.toLowerCase(),
-              key: hashKey,
+              key: effectiveKey,
             });
             if (alive && res?.client) {
               setClient(res.client);
               setPhase("app");
               setRoom(res.roomId);
-              toast(lang === "hi" ? "रूम में शामिल हो गए" : "Joined room via link", "good");
+              try {
+                sessionStorage.setItem(
+                  "ked.guest_session",
+                  JSON.stringify({
+                    code: roomParam.toLowerCase(),
+                    key: effectiveKey,
+                    username: effectiveName,
+                    roomId: res.roomId,
+                  })
+                );
+                const hash = effectiveKey ? `#k=${effectiveKey}` : "";
+                window.history.replaceState(null, "", `/?room=${roomParam.toLowerCase()}${hash}`);
+              } catch {
+                /* ignore */
+              }
               return;
             }
           } catch (e) {
-            toast((e as Error).message || "Failed to join room", "bad");
+            try {
+              sessionStorage.removeItem("ked.guest_session");
+              window.history.replaceState(null, "", "/");
+            } catch {
+              /* ignore */
+            }
           }
         }
 
@@ -384,6 +418,23 @@ export default function Page() {
             setPhase("app");
             const first = Object.values(guestClient.data.rooms)[0];
             if (first) setRoom(first.id);
+            try {
+              sessionStorage.setItem(
+                "ked.guest_session",
+                JSON.stringify({
+                  code: guestClient.roomCode,
+                  key: guestClient.roomKey,
+                  username: guestClient.username,
+                  roomId: first?.id,
+                })
+              );
+              const hash = guestClient.roomKey ? `#k=${guestClient.roomKey}` : "";
+              if (guestClient.roomCode) {
+                window.history.replaceState(null, "", `/?room=${guestClient.roomCode}${hash}`);
+              }
+            } catch {
+              /* ignore */
+            }
             toast(lang === "hi" ? "अस्थायी रूम तैयार है — चैट शुरू करें" : "Ephemeral room ready — start chatting", "good");
           }}
         />

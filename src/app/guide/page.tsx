@@ -415,13 +415,18 @@ Receiver fetches   →  GET /sync?cursor=...
           <H id="features" title={lang === "hi" ? "6 · संपूर्ण सुविधाएँ" : "6 · Complete Feature Matrix"} />
           <div className="panel p-4">
             <Row k="End-to-End Encryption (X3DH-lite + Double Ratchet AES-256-GCM)" v="Active" />
+            <Row k="P2P & Group E2EE WebRTC Audio & Video Calling (Live Ringing & Selective Join)" v="Active" />
+            <Row k="Encrypted Attachments & In-Browser PDF Viewer (AES-GCM 5MB + Direct View)" v="Active" />
+            <Row k="Stealth Decoy Working Calculator Camouflage (Secret PIN 1337 = Unlock)" v="Active" />
+            <Row k="Active Room Refresh & Session Persistence (F5 Safe via sessionStorage & URL Sync)" v="Active" />
+            <Row k="Zero-Dependency S3 / Cloudflare R2 / Backblaze B2 Cloud Storage Engine" v="Active" />
             <Row k="Ephemeral 1-Click Rooms (30s to 120m Auto-Burn)" v="Active" />
             <Row k="Automatic EXIF / Location Metadata Stripping for Photos" v="Active" />
+            <Row k="In-Browser Voice Notes (1x, 1.5x, 2x) & Round Front-Camera Video Notes" v="Active" />
             <Row k="DuckDuckGo-Style Fire Combustion Burn & Shred" v="Active" />
             <Row k="Anti-Snoop Shield & Focus-Loss Blur Protection" v="Active" />
             <Row k="Screen Capture & PrintScreen Warning Alert Banner" v="Active" />
             <Row k="Database Hard Deletion & Automatic Disk Pruning" v="Active" />
-            <Row k="Dynamic Live GitHub Stars & Repository Badge" v="Active" />
             <Row k="Strict Zero-Telemetry Default (No Hardcoded Trackers)" v="Active" />
             <Row k="Mobile-First Responsive UI (iOS Safe Area Padding)" v="Active" />
           </div>
@@ -432,7 +437,7 @@ Receiver fetches   →  GET /sync?cursor=...
             <Row k="Enter" v={lang === "hi" ? "संदेश भेजें" : "Send message"} />
             <Row k="Shift + Enter" v={lang === "hi" ? "नई पंक्ति" : "New line"} />
             <Row k="Ctrl + B / Cmd + B" v={lang === "hi" ? "इंस्पेक्टर टॉगल करें" : "Toggle Inspector"} />
-            <Row k="Ctrl + K / Cmd + K" v={lang === "hi" ? "रूम खोजें / फ़िल्टर" : "Search & Filter Rooms"} />
+            <Row k="Ctrl + K / Cmd + K" v={lang === "hi" ? "संदेश / रूम खोजें" : "Search Messages & Rooms"} />
             <Row k="Ctrl + Shift + P" v={lang === "hi" ? "पैनिक वाइप संवाद" : "Panic Wipe Dialog"} />
             <Row k="Esc" v={lang === "hi" ? "संवाद बंद करें" : "Close Modal"} />
           </div>

@@ -951,6 +951,10 @@ export function Chat({
     setBurning(true);
     setBurnText(lang === "hi" ? "इतिहास नष्ट एवं भस्म किया जा रहा है..." : "Incinerating & Shredding History...");
     try {
+      sessionStorage.removeItem("ked.guest_session");
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", "/");
+      }
       await client.burnRoom(roomId);
     } catch {}
     setTimeout(() => {
