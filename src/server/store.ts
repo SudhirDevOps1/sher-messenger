@@ -14,6 +14,13 @@
  * keys live only in the client's PBKDF2-encrypted vault blob.
  */
 
+import {
+  isExternalStorageEnabled,
+  uploadToExternalStorage,
+  downloadFromExternalStorage,
+  deleteFromExternalStorage,
+} from "./storage";
+
 export type Row = Record<string, unknown>;
 
 export interface UserRow {
@@ -699,19 +706,43 @@ export class SqlStore implements Store {
   }
 
   async putAttachment(a: { id: string; roomId: string; uploaderId: string; data: string; size: number; sha: string; createdAt: string; expiresAt: string | null }): Promise<void> {
+    let storedData = a.data;
+    if (isExternalStorageEnabled()) {
+      const s3Key = `attachments/${a.id}.enc`;
+      const ok = await uploadToExternalStorage(s3Key, a.data);
+      if (ok) {
+        storedData = `b2://${s3Key}`;
+      }
+    }
     await this.run(
       `INSERT INTO ked_attachments (id, room_id, uploader_id, data, size, sha, created_at, expires_at, destroyed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL)`,
-      [a.id, a.roomId, a.uploaderId, a.data, a.size, a.sha, a.createdAt, a.expiresAt],
+      [a.id, a.roomId, a.uploaderId, storedData, a.size, a.sha, a.createdAt, a.expiresAt],
     );
   }
 
   async getAttachment(id: string): Promise<{ data: string; roomId: string; expiresAt: string | null } | null> {
     const rows = await this.run(`SELECT data, room_id, expires_at FROM ked_attachments WHERE id=$1`, [id]);
     if (!rows.length) return null;
-    return { data: String(rows[0].data), roomId: String(rows[0].room_id), expiresAt: (rows[0].expires_at as string) ?? null };
+    const rawData = String(rows[0].data);
+    let payload = rawData;
+    if (rawData.startsWith("b2://") || rawData.startsWith("s3://")) {
+      const key = rawData.replace(/^(b2|s3):\/\//, "");
+      const ext = await downloadFromExternalStorage(key);
+      if (ext) {
+        payload = ext;
+      }
+    }
+    return { data: payload, roomId: String(rows[0].room_id), expiresAt: (rows[0].expires_at as string) ?? null };
   }
 
   async destroyAttachment(id: string): Promise<void> {
+    try {
+      const rows = await this.run(`SELECT data FROM ked_attachments WHERE id=$1`, [id]);
+      if (rows.length && (String(rows[0].data).startsWith("b2://") || String(rows[0].data).startsWith("s3://"))) {
+        const key = String(rows[0].data).replace(/^(b2|s3):\/\//, "");
+        void deleteFromExternalStorage(key);
+      }
+    } catch {}
     await this.run(`DELETE FROM ked_attachments WHERE id=$1`, [id]);
   }
 

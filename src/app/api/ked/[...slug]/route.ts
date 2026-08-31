@@ -1,5 +1,6 @@
 import { createHash, pbkdf2Sync, randomUUID } from "node:crypto";
 import { RATE_RULES, clientIp, getStore, type InviteRow, type MessageRow, type NoticeRow, type UserRow } from "@/server/store";
+import { getMaxFileSizeMB, getMaxBase64Length } from "@/server/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -388,20 +389,23 @@ async function handlePost(req: Request, ctx: Ctx): Promise<Response> {
 
   if (path === "attachment") {
     const me = await auth(req);
-    if (!me) return err("unauthorised", 401);
-    const rl = await bucket("attach", req, me.user.id);
-    if (!rl.ok) return err("attachment quota reached", 429);
     const b = await payload(req);
+    const anonId = str((b as Record<string, unknown>).anonId, 64) || null;
+    const userId = me ? me.user.id : anonId;
+    if (!userId) return err("unauthorised", 401);
+    const rl = await bucket("attach", req, userId);
+    if (!rl.ok) return err("attachment quota reached", 429);
     const roomId = str(b.roomId, 80);
-    if (!(await store.isMember(roomId, me.user.id))) return err("not a member of this room", 403);
-    const data = str(b.data, 4_000_000);
-    if (data.length > 3_000_000) return err("encrypted file too large", 413);
+    if (!(await store.isMember(roomId, userId))) return err("not a member of this room", 403);
+    const maxB64 = getMaxBase64Length();
+    const data = str(b.data, maxB64 + 100_000);
+    if (data.length > maxB64) return err(`encrypted file too large (max ${getMaxFileSizeMB()} MB)`, 413);
     const ttl = typeof b.ttlMs === "number" && b.ttlMs > 0 ? Math.min(b.ttlMs, 1000 * 60 * 60 * 24 * 30) : 1000 * 60 * 60 * 24 * 7;
     const id = `a_${randomUUID().replace(/-/g, "")}`;
     await store.putAttachment({
       id,
       roomId,
-      uploaderId: me.user.id,
+      uploaderId: userId,
       data,
       size: Math.round((data.length * 3) / 4),
       sha: str(b.sha, 128),
@@ -984,9 +988,11 @@ async function handleGet(req: Request, ctx: Ctx): Promise<Response> {
 
   if (path === "attachment") {
     const me = await auth(req);
-    if (!me) return err("unauthorised", 401);
+    const anonId = url.searchParams.get("anonId") || "";
+    const userId = me ? me.user.id : anonId;
+    if (!userId) return err("unauthorised", 401);
     const roomId = url.searchParams.get("room") || "";
-    if (!(await store.isMember(roomId, me.user.id))) return err("not a member of this room", 403);
+    if (!(await store.isMember(roomId, userId))) return err("not a member of this room", 403);
     const a = await store.getAttachment(url.searchParams.get("id") || "");
     if (!a) return err("gone (shredded or expired)", 410);
     return json({ data: a.data });

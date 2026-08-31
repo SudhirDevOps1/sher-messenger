@@ -1020,12 +1020,22 @@ export class KedClient {
     }
     let attachment: AttachmentRef | null = null;
     if (opts.file) {
-      if (opts.file.size > 2_000_000) throw new Error("file too large for this relay (2 MB limit)");
+      const maxMb = typeof process !== "undefined" && process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB
+        ? parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB, 10) || 5
+        : 5;
+      const maxBytes = maxMb * 1024 * 1024;
+      if (opts.file.size > maxBytes) throw new Error(`file too large (${opts.file.size} bytes > max ${maxMb} MB limit)`);
       const sanitized = await stripExifMetadata(opts.file);
       const enc = await encryptAttachment(sanitized.buf, sanitized.name, sanitized.mime);
       const up = await req<{ id: string }>(this.token, "attachment", {
         method: "POST",
-        body: JSON.stringify({ roomId: opts.roomId, data: enc.cipherB64, sha: enc.key.sha, ttlMs: opts.ttlMs ?? undefined }),
+        body: JSON.stringify({
+          roomId: opts.roomId,
+          data: enc.cipherB64,
+          sha: enc.key.sha,
+          ttlMs: opts.ttlMs ?? undefined,
+          anonId: this.userId,
+        }),
       });
       attachment = { ...enc.key, id: up.id };
     }
@@ -1304,7 +1314,10 @@ export class KedClient {
   async loadAttachment(att: AttachmentRef, roomId: string): Promise<string> {
     const hit = this.attachmentCache.get(att.id);
     if (hit) return hit;
-    const res = await req<{ data: string }>(this.token, `attachment?id=${encodeURIComponent(att.id)}&room=${encodeURIComponent(roomId)}`);
+    const res = await req<{ data: string }>(
+      this.token,
+      `attachment?id=${encodeURIComponent(att.id)}&room=${encodeURIComponent(roomId)}${this.userId ? `&anonId=${encodeURIComponent(this.userId)}` : ""}`,
+    );
     const bytes = await decryptAttachment(res.data, att);
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: att.mime }));
     this.attachmentCache.set(att.id, url);
