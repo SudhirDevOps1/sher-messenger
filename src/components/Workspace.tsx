@@ -49,20 +49,109 @@ function Rich({ text }: { text: string }) {
   );
 }
 
-/* ------------------------------------------------------------------ attachment card */
+/* ------------------------------------------------------------------ voice player & attachment card */
+
+function VoicePlayer({ url, size }: { url: string; name?: string; size: number }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
+  const togglePlay = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      el.pause();
+    } else {
+      void el.play();
+    }
+  };
+
+  const toggleRate = () => {
+    const rates = [1, 1.5, 2];
+    const next = rates[(rates.indexOf(playbackRate) + 1) % rates.length];
+    setPlaybackRate(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  };
+
+  const fmtDur = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="flex items-center gap-2.5 p-2.5 bg-black/40 rounded-xl border border-[var(--line)] max-w-xs mt-1.5 shadow-sm">
+      <audio
+        ref={audioRef}
+        src={url}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCurrentTime(0); }}
+        onTimeUpdate={(e) => setCurrentTime((e.target as HTMLAudioElement).currentTime)}
+        onLoadedMetadata={(e) => setDuration((e.target as HTMLAudioElement).duration)}
+      />
+      <button
+        type="button"
+        onClick={togglePlay}
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--acc)] text-[var(--acc-ink)] shadow-md transition hover:scale-105 active:scale-95"
+      >
+        <Icon name={playing ? "pause" : "play"} size={14} />
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-0.5 h-4 mb-1 overflow-hidden">
+          {[40, 70, 30, 90, 60, 100, 45, 80, 55, 95, 75, 40, 85, 65, 30, 90, 50, 70, 80, 40].map((h, i) => {
+            const active = duration > 0 && (i / 20) <= (currentTime / duration);
+            return (
+              <span
+                key={i}
+                style={{ height: `${h}%` }}
+                className={`w-1 rounded-full transition-colors ${active ? "bg-[var(--acc)]" : "bg-white/20"} ${playing ? "animate-pulse" : ""}`}
+              />
+            );
+          })}
+        </div>
+        <div className="flex justify-between items-center text-[10px] font-mono text-[var(--ink-faint)]">
+          <span>{fmtDur(currentTime || 0)} / {fmtDur(duration || 0)}</span>
+          <span className="text-[9.5px]">{fmtBytes(size)} · Voice</span>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={toggleRate}
+        className="chip text-[9.5px] font-mono shrink-0 px-1.5 py-0.5"
+        title="Playback speed"
+      >
+        {playbackRate}x
+      </button>
+    </div>
+  );
+}
 
 function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
   const att = msg.attachment;
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const isImage = att?.mime.startsWith("image/") ?? false;
+  const isAudio = att?.mime.startsWith("audio/") ?? false;
 
   useEffect(() => {
     if (!att) return;
     const cached = client.attachmentCache.get(att.id);
-    if (cached && isImage) setUrl(cached);
-  }, [att, client, isImage]);
+    if (cached) {
+      setUrl(cached);
+      setOpen(true);
+    } else if (isAudio || isImage) {
+      // auto-load voice notes & images
+      void client.loadAttachment(att, msg.roomId).then((u) => {
+        setUrl(u);
+        setOpen(true);
+      }).catch(() => {});
+    }
+  }, [att, client, isImage, isAudio, msg.roomId]);
 
   if (!att) return null;
   const load = async () => {
@@ -75,17 +164,24 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
     }
   };
 
+  if (isAudio && url) {
+    return <VoicePlayer url={url} size={att.size} />;
+  }
+
   return (
     <div className="mt-2 overflow-hidden rounded-xl border border-[var(--line)] bg-black/30">
       {isImage && url ? (
-        // The source is a short-lived in-memory blob: URL created after local decryption;
-        // framework image optimization would upload/re-proxy plaintext and violate E2EE.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={att.name} className="max-h-[320px] w-full object-cover" />
+        <div className="relative group cursor-pointer" onClick={() => setLightbox(true)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={att.name} className="max-h-[320px] w-full object-cover rounded-t-xl transition hover:opacity-90" />
+          <span className="absolute bottom-2 right-2 chip text-[10px] bg-black/70 backdrop-blur">
+            🔍 Zoom
+          </span>
+        </div>
       ) : (
         <div className="row items-center justify-between gap-3 px-3 py-2.5">
           <span className="row min-w-0">
-            <Icon name="doc" size={16} />
+            <Icon name={isAudio ? "volume" : "doc"} size={16} />
             <span className="min-w-0">
               <span className="block truncate text-[12.5px] font-semibold">{att.name}</span>
               <span className="mono block text-[10px] text-[var(--ink-faint)]">
@@ -99,11 +195,35 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
         </div>
       )}
       {url && isImage && open ? (
-        <a className="mono block border-t border-[var(--line)] px-3 py-1.5 text-[10.5px] text-[var(--acc-2)]" href={url} download={att.name}>
-          saved copy lives only as a blob: URL in this tab
-        </a>
+        <div className="row justify-between border-t border-[var(--line)] px-3 py-1.5 text-[10.5px]">
+          <span className="mono text-[var(--acc)]">✓ E2EE decrypted blob</span>
+          <a className="mono text-[var(--acc-2)] hover:underline" href={url} download={att.name}>
+            Save decrypted copy ➔
+          </a>
+        </div>
       ) : null}
       {err ? <div className="mono border-t border-[rgba(255,107,122,.3)] px-3 py-2 text-[10.5px] text-[#ffc2c9]">{err}</div> : null}
+
+      {lightbox && url ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md"
+          onClick={() => setLightbox(false)}
+        >
+          <button
+            className="btn btn-sm fixed right-4 top-4 z-50 !bg-white/10 text-white font-bold"
+            onClick={() => setLightbox(false)}
+          >
+            ✕ Close
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={att.name}
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -252,23 +372,24 @@ function Bubble({
         </div>
 
         {/* hover toolbar */}
-        <div className="hover-tools row flex-none self-center gap-1">
-          {["🔥", "👍", "🔐"].map((e) => (
+        <div className="hover-tools row flex-none self-center gap-1 rounded-full border border-[var(--line)] bg-[#0d121d]/95 p-1 shadow-xl backdrop-blur-md">
+          {["👍", "❤️", "😂", "😮", "🔥", "🔒", "👏"].map((e) => (
             <button
               key={e}
-              className="btn btn-icon btn-sm !px-1.5"
-              title={`react ${e}`}
+              className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10 hover:scale-125 transition-transform"
+              title={`React ${e}`}
               onClick={() => act(() => client.react(msg.roomId, msg.id, e))}
             >
-              <span className="text-[12px] leading-none">{e}</span>
+              <span className="text-[13px] leading-none">{e}</span>
             </button>
           ))}
-          <button className="btn btn-icon btn-sm" title="Reply" onClick={() => onReply(msg)}>
+          <span className="h-3 w-px bg-white/15 mx-0.5" />
+          <button className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10" title="Quote Reply" onClick={() => onReply(msg)}>
             <Icon name="reply" size={13} />
           </button>
           <button
-            className="btn btn-icon btn-sm"
-            title="Copy plaintext (clipboard auto-clears if enabled)"
+            className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10"
+            title="Copy plaintext"
             onClick={() =>
               act(async () => {
                 await navigator.clipboard.writeText(msg.text);
@@ -279,14 +400,14 @@ function Bubble({
           >
             <Icon name="copy" size={13} />
           </button>
-          <button className="btn btn-icon btn-sm" title="Seal details" onClick={() => onInfo(msg)}>
+          <button className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10" title="Ratchet & Crypto Details" onClick={() => onInfo(msg)}>
             <Icon name="key" size={13} />
           </button>
           {me ? (
             <>
               <button
-                className="btn btn-icon btn-sm"
-                title="Edit (re-encrypt with the next ratchet key)"
+                className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10"
+                title="Edit message"
                 onClick={() => {
                   setDraft(msg.text);
                   setEditing(true);
@@ -295,8 +416,8 @@ function Bubble({
                 <Icon name="gear" size={13} />
               </button>
               <button
-                className="btn btn-icon btn-sm btn-danger"
-                title="Unsend: shred at relay + destroy local copies"
+                className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent text-[#ff6b7a] hover:!bg-red-500/20"
+                title="Unsend & shred at relay + peer devices"
                 onClick={() => act(() => client.recall(msg.roomId, msg.id))}
               >
                 <Icon name="trash" size={13} />
@@ -304,8 +425,8 @@ function Bubble({
             </>
           ) : (
             <button
-              className="btn btn-icon btn-sm btn-danger"
-              title="Burn my copy now"
+              className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent text-[#ff9d5c] hover:!bg-amber-500/20"
+              title="Burn my local copy"
               onClick={() => act(() => client.recall(msg.roomId, msg.id, false))}
             >
               <Icon name="flame" size={13} />
@@ -549,10 +670,76 @@ export function Chat({
   const [emoji, setEmoji] = useState(false);
   const [burning, setBurning] = useState(false);
   const [burnText, setBurnText] = useState("Burning & Shredding Room...");
+  const [recording, setRecording] = useState(false);
+  const [recTime, setRecTime] = useState(0);
+  const mediaRecRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const now = useNow(1000);
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      setRecTime(0);
+      setRecording(true);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.start();
+      recTimerRef.current = setInterval(() => {
+        setRecTime((t) => t + 1);
+      }, 1000);
+    } catch (e) {
+      setErr(lang === "hi" ? "माइक्रोफ़ोन अनुमति नहीं मिली।" : "Microphone permission denied or not supported.");
+    }
+  };
+
+  const cancelVoiceRecording = () => {
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    if (mediaRecRef.current && mediaRecRef.current.state !== "inactive") {
+      try {
+        mediaRecRef.current.stream.getTracks().forEach((t) => t.stop());
+        mediaRecRef.current.stop();
+      } catch {}
+    }
+    setRecording(false);
+    audioChunksRef.current = [];
+  };
+
+  const finishVoiceRecording = async () => {
+    if (!mediaRecRef.current || !roomId) return;
+    const mediaRecorder = mediaRecRef.current;
+    
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    
+    mediaRecorder.onstop = async () => {
+      try {
+        mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (audioBlob.size > 0) {
+          const voiceFile = new File([audioBlob], `voice-${Date.now()}.webm`, { type: "audio/webm" });
+          await send(voiceFile);
+        }
+      } catch (e) {
+        setErr((e as Error).message);
+      } finally {
+        setRecording(false);
+        audioChunksRef.current = [];
+      }
+    };
+
+    if (mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+    }
+  };
 
   const room = roomId ? client.data.rooms[roomId] : null;
   const list = roomId ? client.data.history[roomId] ?? [] : [];
@@ -869,65 +1056,101 @@ export function Chat({
           </div>
         ) : null}
         <div className="row items-end gap-1.5 sm:gap-2">
-          <div className="row flex-1 items-end gap-1 rounded-xl border border-[var(--line)] bg-black/35 p-1.5 focus-within:border-[rgba(79,240,182,.5)]">
-            <button className="btn btn-icon btn-sm !border-transparent !bg-transparent shrink-0" title="Attach (encrypted before upload)" onClick={() => fileRef.current?.click()}>
-              <Icon name="clip" size={16} />
-            </button>
-            <div className="relative shrink-0">
+          {recording ? (
+            <div className="row flex-1 items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 animate-pulse">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping" />
+              <span className="mono text-xs font-bold text-red-300">
+                {lang === "hi" ? "वॉइस नोट रिकॉर्ड हो रहा है..." : "Recording Voice Note..."} ({Math.floor(recTime / 60)}:{(recTime % 60).toString().padStart(2, "0")})
+              </span>
+              <span className="flex-1" />
               <button
-                className="btn btn-icon btn-sm !border-transparent !bg-transparent"
-                title="Emoji"
-                onClick={() => setEmoji((v) => !v)}
+                type="button"
+                className="btn btn-sm btn-icon !border-transparent !bg-white/10 text-red-300 hover:!bg-red-500/20"
+                onClick={cancelVoiceRecording}
+                title="Cancel recording"
               >
-                <Icon name="smile" size={16} />
+                <Icon name="trash" size={14} />
               </button>
-              <EmojiPicker
-                open={emoji}
-                onClose={() => setEmoji(false)}
-                onPick={(e) => {
-                  setDraft((d) => d + e);
-                  setEmoji(false);
-                  void client.sendTyping(room.id);
-                }}
-              />
+              <button
+                type="button"
+                className="btn btn-sm btn-primary !py-1 !px-3 font-bold"
+                onClick={() => void finishVoiceRecording()}
+                title="Seal & send voice note"
+              >
+                <Icon name="send" size={13} /> {lang === "hi" ? "भेजें" : "Send"}
+              </button>
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void send(f);
-              }}
-            />
-            <textarea
-              className="max-h-[150px] min-h-[36px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] sm:text-[13.5px] leading-[1.5] outline-none placeholder:text-[var(--ink-faint)]"
-              placeholder={`Message @${name} — sealed in this tab`}
-              value={draft}
-              rows={1}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                void client.sendTyping(room.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send();
-                }
-              }}
-            />
-            <span className="mono hidden sm:inline px-1 text-[9.5px] text-[var(--ink-faint)] shrink-0">
-              {draft.length ? `${draft.length}c → ${Math.ceil(draft.length * 1.4)}B ct` : ""}
-            </span>
-          </div>
-          <button
-            className="btn btn-primary px-3 sm:px-4 py-2 shrink-0 font-semibold"
-            onClick={() => void send()}
-            disabled={sending || (!draft.trim() && !reply)}
-          >
-            {sending ? <Icon name="refresh" size={15} className="animate-spin" /> : <Icon name="send" size={15} />}
-            <span className="hidden sm:inline">{lang === "hi" ? "सील व भेजें" : "seal & send"}</span>
-          </button>
+          ) : (
+            <>
+              <div className="row flex-1 items-end gap-1 rounded-xl border border-[var(--line)] bg-black/35 p-1.5 focus-within:border-[rgba(79,240,182,.5)]">
+                <button className="btn btn-icon btn-sm !border-transparent !bg-transparent shrink-0" title="Attach (encrypted before upload)" onClick={() => fileRef.current?.click()}>
+                  <Icon name="clip" size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-icon btn-sm !border-transparent !bg-transparent shrink-0 text-[var(--acc)] hover:bg-white/5"
+                  title="Hold/Tap to record encrypted voice note"
+                  onClick={() => void startVoiceRecording()}
+                >
+                  <Icon name="mic" size={16} />
+                </button>
+                <div className="relative shrink-0">
+                  <button
+                    className="btn btn-icon btn-sm !border-transparent !bg-transparent"
+                    title="Emoji"
+                    onClick={() => setEmoji((v) => !v)}
+                  >
+                    <Icon name="smile" size={16} />
+                  </button>
+                  <EmojiPicker
+                    open={emoji}
+                    onClose={() => setEmoji(false)}
+                    onPick={(e) => {
+                      setDraft((d) => d + e);
+                      setEmoji(false);
+                      void client.sendTyping(room.id);
+                    }}
+                  />
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void send(f);
+                  }}
+                />
+                <textarea
+                  className="max-h-[150px] min-h-[36px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] sm:text-[13.5px] leading-[1.5] outline-none placeholder:text-[var(--ink-faint)]"
+                  placeholder={`Message @${name} — sealed in this tab`}
+                  value={draft}
+                  rows={1}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    void client.sendTyping(room.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
+                <span className="mono hidden sm:inline px-1 text-[9.5px] text-[var(--ink-faint)] shrink-0">
+                  {draft.length ? `${draft.length}c → ${Math.ceil(draft.length * 1.4)}B ct` : ""}
+                </span>
+              </div>
+              <button
+                className="btn btn-primary px-3 sm:px-4 py-2 shrink-0 font-semibold"
+                onClick={() => void send()}
+                disabled={sending || (!draft.trim() && !reply)}
+              >
+                {sending ? <Icon name="refresh" size={15} className="animate-spin" /> : <Icon name="send" size={15} />}
+                <span className="hidden sm:inline">{lang === "hi" ? "सील व भेजें" : "seal & send"}</span>
+              </button>
+            </>
+          )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className="kicker">ttl</span>
