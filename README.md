@@ -160,8 +160,8 @@ After the window, **history is dead on both sides** — no recovery, by design. 
 | --- | --- |
 | **P1 core** | invite-only signup · handle + passphrase identity (no phone/email) · E2EE 1:1 text · X3DH-lite + Double Ratchet · sent/sealed/read ticks · typing · reply · edit ("edited" state) · delete-for-everyone (relay shred) · reactions · day separators · offline outbox (IndexedDB) · safety number (60-digit) + verify flag · encrypted key export · panic wipe |
 | **P1.5 admin** | `/admin` with RBAC · dashboard counters · user list with block/unblock/promote/purge · invite manager (hashed codes, use-limit, expiry, role) · SYSTEM broadcast (flagged "not E2EE") · content-free audit trail · health/ready/version probes |
-| **P2 rich** | attachments (client-side AES-GCM, SHA-256 verified, ≤2 MB) · sender-key groups ≤32 with re-key · per-room + per-message TTL (30s → 30d) · local-only history search · PWA install · offline shell · blur-on-blur · clipboard auto-clear |
-| **P3 later** | voice/video (LiveKit), multi-device QR link, stories, federation note |
+| **P2 rich & modern** | encrypted attachments (client-side AES-GCM, SHA-256 verified, default 5 MB, configurable via ENV, Backblaze B2/S3 adapter) · in-browser voice notes with speed multiplier (1x, 1.5x, 2x) · front-camera circular round video notes · P2P E2EE WebRTC voice & video calls · in-chat decrypted memory search · pinned messages · stealth decoy working calculator mode with secret PIN unlock · sender-key groups ≤32 with re-key · per-room + per-message TTL (30s → 30d) · 1-click PWA install · offline shell · blur-on-blur · clipboard auto-clear |
+| **P3 future** | multi-device QR link, disappearing ephemeral stories, decentralized federation |
 
 ## Quickstart
 

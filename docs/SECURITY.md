@@ -67,7 +67,7 @@ research authorised, will not pursue legal action, and will not invoke the Terms
 - [x] CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP, `X-Frame-Options` on every response (see `SECURITY-HEADERS.md` for the `no-screenshot` / watermark CSP notes)
 - [x] HSTS (via `netlify.toml` / `public/_headers` / Caddyfile)
 - [x] no `eval`, no `dangerouslySetInnerHTML` on user content, no remote scripts
-- [x] per-route token buckets (`admin-env`, `rooms`, `register`, `login`, `send`, `sync`) + 6-strike 15-minute lockout
+- [x] per-route token buckets (`admin-env`, `rooms`, `register`, `login`, `send`, `sync`, `attach`, `shred`) + 6-strike 15-minute lockout
 - [x] invite codes hashed at rest, single-use default, expiry, admin-only minting; room codes likewise hashed, 6-char, `maxUsers` capped
 - [x] bearer tokens SHA-256 hashed at rest, 30-day expiry, per-device revocation
 - [x] relay never returns HTML on error (`/api/ked/__crash-test` proves it)
@@ -75,5 +75,7 @@ research authorised, will not pursue legal action, and will not invoke the Terms
 - [x] WebSocket/realtime origin pinning documented for the WS adapter
 - [x] `beforeunload` auto-delete: `sessionStorage.clear()` + ephemeral history wipe; `blur`/`secret` + watermark
 - [x] local vault `ked.vault.v1.<username>` at rest = `AES-256-GCM(vaultKey, JSON.stringify(VaultData), utf8(username))` where `vaultKey = PBKDF2(passphrase, 16B random salt, 750k)` (`src/lib/client.ts`)
+- [x] Zero-dependency AWS SigV4 storage adapter for Backblaze B2 / AWS S3 with automatic shredding
+- [x] Automated 13-test cryptographic tamper resistance, AEAD validation, and memory zeroization test suite (`npm test`)
 - [ ] TOTP second factor on `/admin` (roadmap)
 - [ ] third-party audit (roadmap)

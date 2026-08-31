@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is SemVer.
 
+## [0.1.5] - 2026-08-31
+### Added
+- **Configurable 5 MB File & Media Attachments** — Expanded default attachment limits from 2 MB to 5 MB with manual environment variable configuration (`MAX_FILE_SIZE_MB` and `NEXT_PUBLIC_MAX_FILE_SIZE_MB`).
+- **Zero-Dependency S3 / Backblaze B2 Storage Adapter** — Implemented zero-dependency AWS SigV4 storage module (`src/server/storage.ts`) supporting Backblaze B2, Cloudflare R2, and AWS S3 with automatic Postgres/SQLite zero-config fallback.
+- **Guest Ephemeral Room Attachment Auth Fix** — Fixed `401 unauthorised` on attachment uploads in link-fragment (`#k=`) and ephemeral guest rooms by authorizing `anonId` against room membership.
+- **In-Browser Encrypted Voice Notes** — In-browser audio recording via `MediaRecorder` with live pulse timer, animated soundwave visualizer, duration timer, and speed multiplier (`1x`, `1.5x`, `2x`).
+- **Circular Front-Camera Round Video Notes** — Telegram/WhatsApp-style front-camera 15–30s circular video bubbles encrypted client-side with AES-256-GCM before upload.
+- **P2P End-to-End Encrypted WebRTC Audio & Video Calling** — Direct browser-to-browser WebRTC voice and video calls with mute, camera toggle, and in-room encrypted signaling.
+- **In-Chat Real-Time Memory Search** — Client-side in-memory search across active room messages with live match count and scroll-to-highlight, leaving zero traces on the server.
+- **Pinned Messages System** — Ability to pin key messages to the top of any room with quick jump-to-message navigation.
+- **Stealth Decoy Working Calculator Mode** — Emergency camouflage panic button converting the interface into a functional arithmetic calculator, unlocked exclusively with a secret PIN (`1337`).
+- **1-Click PWA App Installation** — Header install button with `beforeinstallprompt` support for native Android/iPhone/Desktop app installation and offline shell caching.
+- **Automated Security Penetration & Tamper Resistance Test Suite** — Comprehensive 13-test automated test suite (`tests/security-audit.test.ts`) validating AEAD tag verification, context isolation, replay rejection, rate limiting, and memory zeroization.
+
 ## [0.1.4] - 2026-08-30
 ### Added
 - **Pure Bilingual Support (English / शुद्ध हिन्दी)** — Strictly eliminated all Romanized Hinglish strings across UI, guide, modals, and documentation in favor of pure, idiomatic English and Hindi translations.
