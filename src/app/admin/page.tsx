@@ -310,7 +310,7 @@ export default function Admin() {
               <div className="mono text-[9.5px] text-[var(--ink-faint)]">@{me.username} · role=admin</div>
             </div>
           </div>
-          <div className="row flex-wrap gap-1.5">
+          <div className="row gap-1.5 overflow-x-auto no-scrollbar flex-nowrap shrink-0 py-0.5 max-w-full">
             {(["overview", "rooms", "users", "invites", "broadcast", "audit"] as Tab[]).map((tTab) => (
               <button
                 key={tTab}
@@ -318,7 +318,7 @@ export default function Admin() {
                   setTab(tTab);
                   void refresh(tTab);
                 }}
-                className={`mono rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                className={`mono shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
                   tab === tTab ? "bg-white/10 text-[var(--ink)]" : "text-[var(--ink-faint)] hover:bg-white/5"
                 }`}
               >
@@ -331,20 +331,20 @@ export default function Admin() {
               </button>
             ))}
             <button
-              className="btn btn-sm"
+              className="btn btn-sm shrink-0 font-semibold"
               onClick={() => {
                 const nextLang: Lang = lang === "en" ? "hi" : "en";
                 setLang(nextLang);
                 try { localStorage.setItem("ked.lang", nextLang); } catch {}
               }}
             >
-              {lang === "en" ? "हिन्दी" : "English"}
+              {lang === "en" ? "हिन्दी" : "EN"}
             </button>
-            <a className="btn btn-sm" href="/">
-              <Icon name="chevron" size={12} className="rotate-180" /> App
+            <a className="btn btn-sm shrink-0" href="/">
+              <Icon name="chevron" size={13} className="rotate-180" /> {lang === "hi" ? "ऐप" : "App"}
             </a>
-            <button className="btn btn-sm btn-danger" onClick={handleLogout} title="Logout admin">
-              <Icon name="x" size={12} />
+            <button className="btn btn-sm shrink-0 text-[#ff8e9b] hover:bg-red-500/10" onClick={handleLogout}>
+              <Icon name="x" size={13} /> {t("adminLogout")}
             </button>
           </div>
         </div>

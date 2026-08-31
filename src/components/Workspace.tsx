@@ -528,6 +528,7 @@ export function Chat({
   roomId,
   onInfo,
   onOpenInspector,
+  onBackToRooms,
   blur,
   sentryHint,
 }: {
@@ -535,6 +536,7 @@ export function Chat({
   roomId: string | null;
   onInfo: (m: HistMsg) => void;
   onOpenInspector: () => void;
+  onBackToRooms?: () => void;
   blur: boolean;
   sentryHint: string;
 }) {
@@ -709,19 +711,29 @@ export function Chat({
 
   return (
     <section className="panel relative flex h-full min-h-0 flex-col overflow-hidden">
-      <header className="row items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
-        <div className="row min-w-0 gap-3">
+      <header className="row items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="row min-w-0 gap-2 sm:gap-3">
+          {onBackToRooms ? (
+            <button
+              className="btn btn-sm lg:hidden !px-2.5 !py-1 text-xs shrink-0"
+              onClick={onBackToRooms}
+              title={lang === "hi" ? "कमरों की सूची पर वापस जाएँ" : "Back to room list"}
+            >
+              <Icon name="chevron" size={13} className="rotate-180" />
+              <span className="font-semibold">{lang === "hi" ? "चैट्स" : "Rooms"}</span>
+            </button>
+          ) : null}
           <Identicon seed={peer?.ikPub ?? room.id} label={name} />
           <div className="min-w-0">
-            <div className="row gap-2">
-              <h2 className="truncate text-[14.5px] font-bold tracking-tight">{name}</h2>
+            <div className="row gap-1.5 sm:gap-2 flex-wrap">
+              <h2 className="truncate text-[13.5px] sm:text-[14.5px] font-bold tracking-tight">{name}</h2>
               {client.roomKey ? (
                 <Chip tone="good" title="Hardcore E2EE: 256-bit key in link fragment">
-                  <Icon name="lock" size={10} /> Hardcore #k=
+                  <Icon name="lock" size={10} /> <span className="hidden xs:inline">Hardcore</span> #k=
                 </Chip>
               ) : client.roomCode ? (
                 <Chip tone="acc" title="Code-Nity: PBKDF2 250k key derivation">
-                  <Icon name="shield" size={10} /> Code-Nity
+                  <Icon name="shield" size={10} /> <span className="hidden xs:inline">Code-Nity</span>
                 </Chip>
               ) : null}
               {room.type === "group" ? (
@@ -730,34 +742,34 @@ export function Chat({
                 </Chip>
               ) : (
                 <Chip tone={peer?.verified ? "good" : "warn"}>
-                  <Icon name={peer?.verified ? "shield" : "alert"} size={10} /> {peer?.verified ? "verified" : "unverified"}
+                  <Icon name={peer?.verified ? "shield" : "alert"} size={10} /> <span className="hidden sm:inline">{peer?.verified ? "verified" : "unverified"}</span>
                 </Chip>
               )}
               {typing ? (
                 <Chip tone="good">
-                  <span className="dot" /> typing…
+                  <span className="dot" /> <span className="hidden sm:inline">typing…</span>
                 </Chip>
               ) : lastInbound ? (
-                <Chip>{relTime(now - lastInbound)}</Chip>
+                <Chip><span className="hidden sm:inline">{relTime(now - lastInbound)}</span></Chip>
               ) : (
-                <Chip>waiting for first message</Chip>
+                <Chip><span className="hidden md:inline">waiting for first message</span></Chip>
               )}
             </div>
-            <div className="mono mt-0.5 truncate text-[10px] text-[var(--ink-faint)]">
-              room {room.id.slice(0, 14)}… · {client.roomKey ? "fragment key in memory" : peer?.safety ? `safety ${peer.safety.slice(0, 15)}…` : "sender keys"}
+            <div className="mono mt-0.5 truncate text-[9.5px] sm:text-[10px] text-[var(--ink-faint)]">
+              room {room.id.slice(0, 10)}… · {client.roomKey ? "fragment key in memory" : peer?.safety ? `safety ${peer.safety.slice(0, 12)}…` : "sender keys"}
             </div>
           </div>
         </div>
-        <div className="row gap-1.5">
+        <div className="row gap-1 sm:gap-1.5 shrink-0">
           <button
-            className="btn btn-sm !border-[rgba(255,100,50,.5)] !bg-[rgba(255,80,0,.14)] !text-[#ff9d5c] hover:!bg-[rgba(255,80,0,.28)] shadow-[0_0_15px_rgba(255,100,0,.25)]"
+            className="btn btn-sm !border-[rgba(255,100,50,.5)] !bg-[rgba(255,80,0,.14)] !text-[#ff9d5c] hover:!bg-[rgba(255,80,0,.28)] shadow-[0_0_15px_rgba(255,100,0,.25)] px-2 sm:px-3"
             title="DuckDuckGo-style Fire Button: Burn & Shred Room History"
             onClick={handleBurnRoom}
           >
-            <Icon name="flame" size={13} /> Fire Burn
+            <Icon name="flame" size={13} /> <span className="hidden sm:inline">Fire Burn</span>
           </button>
           <button
-            className="btn btn-sm"
+            className="btn btn-sm px-2 sm:px-3"
             title="Cycle auto-burn for this room"
             onClick={() => {
               const choices = [null, 30_000, 300_000, 3_600_000];
@@ -765,10 +777,10 @@ export function Chat({
               void client.setRoomTtl(room.id, next);
             }}
           >
-            <Icon name="flame" size={13} /> {room.ttl ? `${Math.round(room.ttl / 1000)}s` : "burn off"}
+            <Icon name="flame" size={13} /> <span className="hidden sm:inline">{room.ttl ? `${Math.round(room.ttl / 1000)}s` : "burn off"}</span>
           </button>
           <button
-            className={`btn btn-sm ${shieldActive ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
+            className={`btn btn-sm px-2 sm:px-3 ${shieldActive ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
             title="Toggle Anti-Snoop Shield (Auto-blurs chat when window loses focus)"
             onClick={() => {
               setShieldActive((prev) => {
@@ -780,7 +792,7 @@ export function Chat({
               });
             }}
           >
-            <Icon name="shield" size={13} /> {shieldActive ? (lang === "hi" ? "शील्ड सक्रिय" : "Shield On") : (lang === "hi" ? "शील्ड" : "Shield")}
+            <Icon name="shield" size={13} /> <span className="hidden sm:inline">{shieldActive ? (lang === "hi" ? "शील्ड चालू" : "Shield On") : (lang === "hi" ? "शील्ड" : "Shield")}</span>
           </button>
           <button
             className="btn btn-icon btn-sm"
@@ -842,7 +854,7 @@ export function Chat({
         <div ref={endRef} />
       </div>
 
-      <footer className="border-t border-[var(--line)] p-3">
+      <footer className="border-t border-[var(--line)] p-2.5 sm:p-3 mobile-safe-bottom">
         {reply ? (
           <div className="row mb-2 justify-between gap-2 rounded-lg border border-[var(--line)] bg-black/30 px-2.5 py-1.5">
             <span className="mono truncate text-[10.5px] text-[var(--ink-dim)]">replying to {reply.from === client.userId ? "yourself" : name}: {reply.text.slice(0, 60)}</span>
@@ -856,18 +868,18 @@ export function Chat({
             <Icon name="alert" size={13} /> {err}
           </div>
         ) : null}
-        <div className="row items-end gap-2">
+        <div className="row items-end gap-1.5 sm:gap-2">
           <div className="row flex-1 items-end gap-1 rounded-xl border border-[var(--line)] bg-black/35 p-1.5 focus-within:border-[rgba(79,240,182,.5)]">
-            <button className="btn btn-icon btn-sm !border-transparent !bg-transparent" title="Attach (encrypted before upload)" onClick={() => fileRef.current?.click()}>
-              <Icon name="clip" size={15} />
+            <button className="btn btn-icon btn-sm !border-transparent !bg-transparent shrink-0" title="Attach (encrypted before upload)" onClick={() => fileRef.current?.click()}>
+              <Icon name="clip" size={16} />
             </button>
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 className="btn btn-icon btn-sm !border-transparent !bg-transparent"
                 title="Emoji"
                 onClick={() => setEmoji((v) => !v)}
               >
-                <Icon name="smile" size={15} />
+                <Icon name="smile" size={16} />
               </button>
               <EmojiPicker
                 open={emoji}
@@ -889,8 +901,8 @@ export function Chat({
               }}
             />
             <textarea
-              className="max-h-[150px] min-h-[34px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[13.5px] leading-[1.5] outline-none placeholder:text-[var(--ink-faint)]"
-              placeholder={`Message @${name} — encrypted in this tab before it leaves`}
+              className="max-h-[150px] min-h-[36px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[16px] sm:text-[13.5px] leading-[1.5] outline-none placeholder:text-[var(--ink-faint)]"
+              placeholder={`Message @${name} — sealed in this tab`}
               value={draft}
               rows={1}
               onChange={(e) => {
@@ -904,13 +916,17 @@ export function Chat({
                 }
               }}
             />
-            <span className="mono px-1 text-[9.5px] text-[var(--ink-faint)]">
+            <span className="mono hidden sm:inline px-1 text-[9.5px] text-[var(--ink-faint)] shrink-0">
               {draft.length ? `${draft.length}c → ${Math.ceil(draft.length * 1.4)}B ct` : ""}
             </span>
           </div>
-          <button className="btn btn-primary" onClick={() => void send()} disabled={sending || (!draft.trim() && !reply)}>
+          <button
+            className="btn btn-primary px-3 sm:px-4 py-2 shrink-0 font-semibold"
+            onClick={() => void send()}
+            disabled={sending || (!draft.trim() && !reply)}
+          >
             {sending ? <Icon name="refresh" size={15} className="animate-spin" /> : <Icon name="send" size={15} />}
-            seal & send
+            <span className="hidden sm:inline">{lang === "hi" ? "सील व भेजें" : "seal & send"}</span>
           </button>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -929,13 +945,13 @@ export function Chat({
                 setTtl(o.ms);
                 void client.setRoomTtl(room.id, o.ms);
               }}
-              className={`chip transition ${ttl === o.ms ? "!border-[rgba(79,240,182,.5)] !bg-[rgba(79,240,182,.14)] !text-[#a9ffe2]" : "hover:bg-white/5"}`}
+              className={`chip transition text-[11px] px-2 py-0.5 ${ttl === o.ms ? "!border-[rgba(79,240,182,.5)] !bg-[rgba(79,240,182,.14)] !text-[#a9ffe2]" : "hover:bg-white/5"}`}
             >
               {o.l}
             </button>
           ))}
           <span className="flex-1" />
-          <span className="mono text-[9.5px] text-[var(--ink-faint)]">enter send · shift+enter newline</span>
+          <span className="mono hidden md:inline text-[9.5px] text-[var(--ink-faint)]">enter send · shift+enter newline</span>
         </div>
       </footer>
     </section>

@@ -443,9 +443,9 @@ export default function Page() {
           <Chip tone={totalUnread ? "warn" : ""}>{totalUnread ? `${totalUnread} unread` : "no unread"}</Chip>
         </div>
 
-        <div className="row gap-1.5">
+        <div className="row gap-1.5 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap shrink-0 max-w-[calc(100vw-160px)] md:max-w-none py-0.5">
           <button
-            className={`btn btn-sm ${!sidebarOpen ? "!border-[var(--acc)] !text-[var(--acc)] font-semibold" : ""}`}
+            className={`btn btn-sm shrink-0 ${!sidebarOpen ? "!border-[var(--acc)] !text-[var(--acc)] font-semibold" : ""}`}
             onClick={() => setSidebarOpen((s) => !s)}
             title={sidebarOpen ? "Collapse sidebar for full screen chat" : "Show sidebar"}
           >
@@ -454,7 +454,7 @@ export default function Page() {
           </button>
 
           <button
-            className="btn btn-sm"
+            className="btn btn-sm shrink-0"
             onClick={() => {
               const accents: Array<"emerald" | "blue" | "purple" | "amber" | "rose"> = ["emerald", "blue", "purple", "amber", "rose"];
               const next = accents[(accents.indexOf(themeAccent) + 1) % accents.length];
@@ -467,9 +467,9 @@ export default function Page() {
             <span className="hidden lg:inline capitalize text-[11px]">{themeAccent}</span>
           </button>
 
-          <GitHubStars className="hidden sm:inline-flex" />
+          <GitHubStars className="hidden sm:inline-flex shrink-0" />
           <button
-            className="btn btn-sm"
+            className="btn btn-sm shrink-0 font-semibold"
             onClick={() => {
               const n = lang === "en" ? "hi" : "en";
               setLang(n);
@@ -479,30 +479,30 @@ export default function Page() {
           >
             {lang === "en" ? "हिंदी" : "EN"}
           </button>
-          <button className="btn btn-sm" onClick={() => void summonSentry(client, true)} title="Boot / re-pair the local peer agent">
+          <button className="btn btn-sm shrink-0" onClick={() => void summonSentry(client, true)} title="Boot / re-pair the local peer agent">
             <Icon name="ghost" size={13} /> <span className="hidden sm:inline">Sentry</span>
           </button>
-          <button className="btn btn-sm" onClick={() => setInspector((v) => !v)} title="Toggle inspector (⌘B)">
+          <button className="btn btn-sm shrink-0" onClick={() => setInspector((v) => !v)} title="Toggle inspector (⌘B)">
             <Icon name="key" size={13} /> <span className="hidden sm:inline">Inspector</span>
           </button>
-          <button className="btn btn-sm" onClick={() => { setFeedbackSent(false); setFeedbackModal(true); }} title="Send feedback / Bug report">
+          <button className="btn btn-sm shrink-0" onClick={() => { setFeedbackSent(false); setFeedbackModal(true); }} title="Send feedback / Bug report">
             <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "फीडबैक" : "Feedback"}</span>
           </button>
           <button
-            className="btn btn-sm !border-[rgba(255,107,122,.4)] !bg-[rgba(255,107,122,.12)] !text-[#ff9aa5] hover:!bg-[rgba(255,107,122,.25)]"
+            className="btn btn-sm shrink-0 !border-[rgba(255,107,122,.4)] !bg-[rgba(255,107,122,.12)] !text-[#ff9aa5] hover:!bg-[rgba(255,107,122,.25)]"
             onClick={() => setModal("panic")}
             title="Panic Wipe (Zero local data & shred sessions)"
           >
             <Icon name="alert" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "पैनिक वाइप" : "Panic"}</span>
           </button>
-          <a className="btn btn-sm" href="/guide" title={lang === "hi" ? "दस्तावेज़ एवं मार्गदर्शिका" : "User Guide & Deploy Handbook"}>
+          <a className="btn btn-sm shrink-0" href="/guide" title={lang === "hi" ? "दस्तावेज़ एवं मार्गदर्शिका" : "User Guide & Deploy Handbook"}>
             <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "मार्गदर्शिका" : "Guide"}</span>
           </a>
-          <a className="btn btn-sm" href="/plan" title="PRD + protocol spec">
+          <a className="btn btn-sm shrink-0" href="/plan" title="PRD + protocol spec">
             <Icon name="doc" size={13} /> <span className="hidden sm:inline">Plan</span>
           </a>
           {me?.role === "admin" ? (
-            <a className="btn btn-sm" href="/sh3r-9x-admin" title="Admin console">
+            <a className="btn btn-sm shrink-0" href="/sh3r-9x-admin" title="Admin console">
               <Icon name="shield" size={13} /> <span className="hidden sm:inline">Admin</span>
             </a>
           ) : null}
@@ -559,7 +559,9 @@ export default function Page() {
         <div className="mono row items-center gap-2 border-b border-[rgba(255,190,85,.3)] bg-[rgba(255,190,85,.1)] px-4 py-2 text-[11px] text-[#ffdca6]">
           <Icon name="alert" size={13} />
           <span className="min-w-0 flex-1">
-            {outboxN > 0 ? `${outboxN} message(s) sealed and queued offline — auto-flush jab relay jawab dega` : "relay se connection nahi — naye messages outbox mein queue honge"}
+            {outboxN > 0
+              ? (lang === "hi" ? `${outboxN} संदेश ऑफलाइन कतार में सुरक्षित हैं — रिले उपलब्ध होने पर स्वतः भेजे जाएंगे` : `${outboxN} message(s) sealed & queued offline — auto-flush when relay responds`)
+              : (lang === "hi" ? "रिले सर्वर से संपर्क नहीं — नए संदेश ऑफलाइन आउटबॉक्स में रहेंगे" : "No connection to relay — new messages will queue in offline outbox")}
           </span>
           {outboxN > 0 ? (
             <button
@@ -575,7 +577,7 @@ export default function Page() {
       ) : null}
 
       <main
-        className={`grid min-h-0 flex-1 gap-2.5 p-2.5 md:gap-3 md:p-3 ${
+        className={`grid min-h-0 flex-1 gap-2 p-2 sm:gap-2.5 sm:p-2.5 md:gap-3 md:p-3 ${
           inspector
             ? sidebarOpen
               ? "lg:grid-cols-[280px_minmax(0,1fr)_336px]"
@@ -585,37 +587,32 @@ export default function Page() {
             : "grid-cols-1"
         }`}
       >
-        {sidebarOpen ? (
-          <div className={`${mobile === "rooms" ? "flex" : "hidden"} min-h-0 lg:flex`}>
-            <Sidebar
-              client={client}
-              activeRoomId={room}
-              onSelect={(id) => {
-                openRoom(id);
-                void client.poll();
-              }}
-              onNewContact={() => setModal("dm")}
-              onNewGroup={() => setModal("group")}
-              lastOpen={lastOpen}
-            />
-          </div>
-        ) : null}
-        <div className={`${mobile === "chat" ? "flex" : "hidden"} min-h-0 flex-col gap-2 lg:flex`}>
-          <div className="row gap-2 lg:hidden">
-            <button className="btn btn-sm" onClick={() => setMobile("rooms")}>
-              <Icon name="chevron" size={13} className="rotate-180" /> rooms ({rooms.length})
-            </button>
-            <Chip tone="good">
-              <span className="dot" /> sealed
-            </Chip>
-          </div>
-          <div className="min-h-0 flex-1">
+        {/* Sidebar: on mobile shows if mobile === 'rooms'; on desktop shows if sidebarOpen */}
+        <div className={`${mobile === "rooms" ? "flex flex-col" : "hidden"} ${sidebarOpen ? "lg:flex lg:flex-col" : "lg:hidden"} min-h-0`}>
+          <Sidebar
+            client={client}
+            activeRoomId={room}
+            onSelect={(id) => {
+              openRoom(id);
+              setMobile("chat");
+              void client.poll();
+            }}
+            onNewContact={() => setModal("dm")}
+            onNewGroup={() => setModal("group")}
+            lastOpen={lastOpen}
+          />
+        </div>
+
+        {/* Chat window: on mobile shows if mobile === 'chat'; on desktop always shows */}
+        <div className={`${mobile === "chat" ? "flex flex-col" : "hidden"} min-h-0 flex-1 lg:flex lg:flex-col`}>
+          <div className="min-h-0 flex-1 flex flex-col">
             <Chat
               client={client}
               roomId={room}
               blur={!!blur}
               sentryHint={sentry ? `Sentry is live as @${sentry.username}` : "boot Sentry from the top bar"}
               onInfo={setSeal}
+              onBackToRooms={() => setMobile("rooms")}
               onOpenInspector={() => {
                 setInspector(true);
                 setTab("session");
@@ -623,8 +620,10 @@ export default function Page() {
             />
           </div>
         </div>
+
+        {/* Inspector: desktop column */}
         {inspector ? (
-          <div className="hidden min-h-0 lg:flex">
+          <div className="hidden min-h-0 lg:flex lg:flex-col">
             <Inspector
               client={client}
               roomId={room}
@@ -636,6 +635,22 @@ export default function Page() {
           </div>
         ) : null}
       </main>
+
+      {/* Mobile Inspector Drawer / Overlay */}
+      {inspector ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)] p-3 lg:hidden">
+          <div className="flex h-full min-h-0 flex-col">
+            <Inspector
+              client={client}
+              roomId={room}
+              tab={tab}
+              onTab={setTab}
+              onClose={() => setInspector(false)}
+              toast={toast}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {blur ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center">

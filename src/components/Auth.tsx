@@ -78,32 +78,32 @@ export default function Auth({
       {onBack ? (
         <button
           onClick={onBack}
-          className="btn btn-sm fixed left-4 top-4 z-40 !border-transparent !bg-black/30 backdrop-blur"
+          className="btn btn-sm fixed left-3 top-3 z-40 !border-transparent !bg-black/60 backdrop-blur shadow-lg"
           title="Back to showcase"
         >
           <Icon name="chevron" size={13} className="rotate-180" /> Back
         </button>
       ) : null}
-      <div className="mx-auto grid min-h-[100dvh] w-full max-w-[1180px] items-center gap-8 px-5 py-10 lg:grid-cols-[1.05fr_.95fr]">
+      <div className="mx-auto grid min-h-[100dvh] w-full max-w-[1180px] items-center gap-6 px-4 py-14 sm:px-5 sm:py-10 lg:grid-cols-[1.05fr_.95fr]">
         {/* ---- pitch */}
         <div className="relative sheet">
           <div className="row gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--line-strong)] bg-[rgba(79,240,182,.12)] text-[var(--acc)]">
+            <span className="grid h-10 w-10 sm:h-11 sm:w-11 place-items-center rounded-2xl border border-[var(--line-strong)] bg-[rgba(79,240,182,.12)] text-[var(--acc)]">
               <Icon name="shield" size={22} />
             </span>
             <div>
-              <div className="text-[20px] font-bold leading-none tracking-tight">
-                KED<span className="text-[var(--acc)]">·</span>VAULT
+              <div className="text-[18px] sm:text-[20px] font-bold leading-none tracking-tight">
+                SHER<span className="text-[var(--acc)]">·</span>VAULT
               </div>
               <div className="kicker mt-1.5">personal zero-knowledge messenger</div>
             </div>
           </div>
 
-          <h1 className="mt-7 max-w-[19ch] text-[clamp(30px,5.2vw,54px)] font-bold leading-[0.98] tracking-[-0.03em]">
+          <h1 className="mt-5 sm:mt-7 max-w-[19ch] text-[clamp(26px,5.2vw,54px)] font-bold leading-[1.05] sm:leading-[0.98] tracking-[-0.03em]">
             Your keys never leave this tab.
             <span className="block text-[var(--ink-faint)]">The relay is allowed to be stupid.</span>
           </h1>
-          <p className="mt-5 max-w-[62ch] text-[14px] leading-relaxed text-[var(--ink-dim)]">
+          <p className="mt-4 sm:mt-5 max-w-[62ch] text-[13.5px] sm:text-[14px] leading-relaxed text-[var(--ink-dim)]">
             Every conversation is sealed client-side with a real Double Ratchet before it touches the network. No phone number, no
             email, no analytics, no cloud backup, no admin. Passphrase is the vault key — if it is lost, nobody can recover your
             history, including me. That is the whole point.

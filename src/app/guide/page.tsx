@@ -164,21 +164,21 @@ export default function GuidePage() {
   return (
     <div className="shell scroll">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--bg)]/90 backdrop-blur">
-        <div className="mx-auto row max-w-[1240px] justify-between gap-3 px-5 py-3">
-          <a className="row gap-2.5 text-[var(--ink)]" href="/">
+        <div className="mx-auto row max-w-[1240px] justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
+          <a className="row gap-2 text-[var(--ink)] shrink-0" href="/">
             <span className="grid h-8 w-8 place-items-center rounded-xl border border-[var(--line-strong)] bg-[rgba(79,240,182,.12)] text-[var(--acc)]">
               <Icon name="shield" size={16} />
             </span>
-            <span className="text-[13.5px] font-bold tracking-tight">
-              KED<span className="text-[var(--acc)]">·</span>VAULT
+            <span className="text-[13px] sm:text-[13.5px] font-bold tracking-tight">
+              SHER<span className="text-[var(--acc)]">·</span>VAULT
               <span className="mono ml-2 text-[10px] font-normal text-[var(--ink-faint)]">
                 {lang === "hi" ? "दस्तावेज़" : "Guide"}
               </span>
             </span>
           </a>
-          <div className="row gap-1.5 flex-wrap">
+          <div className="row gap-1.5 overflow-x-auto no-scrollbar flex-nowrap shrink-0 py-0.5">
             <button
-              className="btn btn-sm"
+              className="btn btn-sm shrink-0 font-semibold"
               onClick={() => {
                 const next = lang === "en" ? "hi" : "en";
                 setLang(next);
@@ -190,23 +190,36 @@ export default function GuidePage() {
             <Chip tone="good">
               <span className="dot" /> {String(stats?.adapter ?? "relay")}
             </Chip>
-            <a className="btn btn-sm" href="/plan">
+            <a className="btn btn-sm shrink-0" href="/plan">
               <Icon name="doc" size={12} /> PRD
             </a>
-            <a className="btn btn-sm" href="/privacy">
+            <a className="btn btn-sm shrink-0" href="/privacy">
               Privacy
             </a>
-            <a className="btn btn-sm" href="/terms">
+            <a className="btn btn-sm shrink-0" href="/terms">
               Terms
             </a>
-            <a className="btn btn-primary btn-sm" href="/">
+            <a className="btn btn-primary btn-sm shrink-0 font-semibold" href="/">
               <Icon name="lock" size={12} /> {lang === "hi" ? "ऐप खोलें" : "Open App"}
             </a>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1240px] gap-8 px-5 py-9 lg:grid-cols-[240px_minmax(0,1fr)]">
+      {/* Mobile Horizontal Section Navigator */}
+      <div className="lg:hidden flex gap-1.5 overflow-x-auto no-scrollbar py-2 px-3 sm:px-5 border-b border-[var(--line)] bg-[var(--bg)]/90 sticky top-[53px] z-20 backdrop-blur">
+        {nav.map(([id, label]) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className="chip shrink-0 text-[11px] whitespace-nowrap !bg-white/5 hover:!bg-white/10"
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+
+      <div className="mx-auto grid max-w-[1240px] gap-6 sm:gap-8 px-3 sm:px-5 py-6 sm:py-9 lg:grid-cols-[240px_minmax(0,1fr)]">
         <nav className="order-2 hidden lg:order-1 lg:block">
           <div className="sticky top-20 grid gap-0.5">
             {nav.map(([id, label]) => (

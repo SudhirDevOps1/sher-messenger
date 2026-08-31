@@ -542,6 +542,29 @@ textarea.input {
   }
 }
 
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Prevent iOS Safari from auto-zooming on input focus (requires 16px min font size on mobile) */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Touch target accessibility for mobile buttons */
+  .btn-touch {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 .glass-card {
   background: rgba(10, 15, 26, 0.65);
   backdrop-filter: blur(16px);

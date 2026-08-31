@@ -94,32 +94,45 @@ export default function Plan() {
 
   return (
     <div className="shell scroll">
-      <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[rgba(5,7,12,.82)] backdrop-blur-xl">
-        <div className="mx-auto row max-w-[1240px] items-center justify-between gap-3 px-5 py-3">
-          <a href="/" className="row gap-2.5">
+      <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[rgba(5,7,12,.88)] backdrop-blur-xl">
+        <div className="mx-auto row max-w-[1240px] items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
+          <a href="/" className="row gap-2 shrink-0">
             <span className="grid h-8 w-8 place-items-center rounded-xl border border-[var(--line-strong)] bg-[rgba(79,240,182,.12)] text-[var(--acc)]">
               <Icon name="shield" size={16} />
             </span>
-            <span className="text-[13.5px] font-bold tracking-tight">
-              KED<span className="text-[var(--acc)]">·</span>VAULT <span className="kicker ml-1">/ live plan + PRD</span>
+            <span className="text-[13px] sm:text-[13.5px] font-bold tracking-tight">
+              SHER<span className="text-[var(--acc)]">·</span>VAULT <span className="kicker ml-1 hidden sm:inline">/ live plan + PRD</span>
             </span>
           </a>
-          <div className="row gap-1.5">
+          <div className="row gap-1.5 overflow-x-auto no-scrollbar flex-nowrap shrink-0 py-0.5">
             <Chip tone="good">
-              <span className="dot" /> relay {String(stats?.adapter ?? "…")}
+              <span className="dot" /> {String(stats?.adapter ?? "…")}
             </Chip>
-            <Chip>rtt {probe}</Chip>
-            <a className="btn btn-sm" href="/guide">
+            <Chip><span className="hidden sm:inline">rtt </span>{probe}</Chip>
+            <a className="btn btn-sm shrink-0" href="/guide">
               <Icon name="spark" size={12} /> Guide
             </a>
-            <a className="btn btn-sm" href="/">
+            <a className="btn btn-primary btn-sm shrink-0 font-semibold" href="/">
               <Icon name="chevron" size={12} /> Open app
             </a>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1240px] gap-8 px-5 py-10 lg:grid-cols-[220px_minmax(0,1fr)]">
+      {/* Mobile Horizontal Section Navigator */}
+      <div className="lg:hidden flex gap-1.5 overflow-x-auto no-scrollbar py-2 px-3 sm:px-5 border-b border-[var(--line)] bg-[var(--bg)]/90 sticky top-[53px] z-20 backdrop-blur">
+        {NAV.map(([id, label]) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className="chip shrink-0 text-[11px] whitespace-nowrap !bg-white/5 hover:!bg-white/10"
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+
+      <div className="mx-auto grid max-w-[1240px] gap-6 sm:gap-8 px-3 sm:px-5 py-6 sm:py-10 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav className="order-2 hidden lg:order-1 lg:block">
           <div className="sticky top-20 grid gap-0.5">
             {NAV.map(([id, label]) => (

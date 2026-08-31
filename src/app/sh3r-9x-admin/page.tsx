@@ -210,7 +210,7 @@ export default function MaskedAdminPage() {
         </header>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 border-b border-[var(--line)] pb-3 mb-6">
+        <div className="flex gap-2 border-b border-[var(--line)] pb-3 mb-6 overflow-x-auto no-scrollbar flex-nowrap items-center py-0.5">
           {[
             { id: "rooms", label: lang === "hi" ? "सक्रिय रूम्स" : "Active Rooms", icon: "flame" },
             { id: "policy", label: lang === "hi" ? "पॉलिसी मैट्रिक्स" : "Policy Matrix", icon: "doc" },
@@ -219,17 +219,17 @@ export default function MaskedAdminPage() {
             <button
               key={tItem.id}
               onClick={() => setTab(tItem.id as any)}
-              className={`btn btn-sm ${tab === tItem.id ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.12)] !text-[#a9ffe2]" : ""}`}
+              className={`btn btn-sm shrink-0 ${tab === tItem.id ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.12)] !text-[#a9ffe2]" : ""}`}
             >
               <Icon name={tItem.icon as any} size={14} /> {tItem.label}
             </button>
           ))}
-          <span className="flex-1" />
+          <span className="flex-1 min-w-[8px]" />
           <button
             onClick={allBurn}
-            className="btn btn-sm !border-red-500/50 !bg-red-500/10 text-red-300 hover:!bg-red-500/20"
+            className="btn btn-sm shrink-0 !border-red-500/50 !bg-red-500/10 text-red-300 hover:!bg-red-500/20"
           >
-            <Icon name="flame" size={14} /> {lang === "hi" ? "आपातकालीन ऑल-बर्न (Kill All)" : "Emergency All-Burn"}
+            <Icon name="flame" size={14} /> {lang === "hi" ? "ऑल-बर्न (Kill All)" : "All-Burn"}
           </button>
         </div>
 

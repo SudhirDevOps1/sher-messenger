@@ -488,14 +488,14 @@ export default function Landing({
   return (
     <div className="relative z-[1] h-[100dvh] overflow-x-hidden overflow-y-auto scroll-smooth">
       {/* ---------------- nav */}
-      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[rgba(5,7,12,.78)] backdrop-blur-xl">
-        <div className="mx-auto row max-w-[1180px] items-center justify-between gap-3 px-5 py-3">
-          <div className="row gap-2.5">
+      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[rgba(5,7,12,.85)] backdrop-blur-xl">
+        <div className="mx-auto row max-w-[1180px] items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
+          <div className="row gap-2 shrink-0">
             <span className="grid h-8 w-8 place-items-center rounded-xl border border-[var(--line-strong)] bg-[rgba(79,240,182,.12)] text-[var(--acc)]">
               <Icon name="shield" size={16} />
             </span>
-            <span className="text-[13.5px] font-bold tracking-tight">
-              KED<span className="text-[var(--acc)]">·</span>VAULT
+            <span className="text-[13px] sm:text-[13.5px] font-bold tracking-tight">
+              SHER<span className="text-[var(--acc)]">·</span>VAULT
             </span>
           </div>
           <nav className="row hidden gap-1 md:flex">
@@ -512,16 +512,16 @@ export default function Landing({
               Docs
             </a>
           </nav>
-          <div className="row gap-1.5 flex-wrap">
-            <GitHubStars className="hidden sm:inline-flex" />
-            <button className="btn btn-sm" onClick={() => setContactModal(true)}>
+          <div className="row gap-1.5 flex-nowrap shrink-0 overflow-x-auto no-scrollbar py-0.5">
+            <GitHubStars className="hidden sm:inline-flex shrink-0" />
+            <button className="btn btn-sm shrink-0" onClick={() => setContactModal(true)}>
               <Icon name="spark" size={13} /> <span className="hidden sm:inline">{lang === "hi" ? "फीडबैक" : "Feedback"}</span>
             </button>
-            <button className="btn btn-sm" onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); try { localStorage.setItem("ked.lang", n); } catch {} }}>
+            <button className="btn btn-sm shrink-0 font-semibold" onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); try { localStorage.setItem("ked.lang", n); } catch {} }}>
               {lang === "en" ? "हिंदी" : "EN"}
             </button>
-            <button className="btn btn-primary btn-sm" onClick={onEnter}>
-              <Icon name="lock" size={13} /> {lang === "hi" ? "वॉल्ट खोलें" : "Open the vault"}
+            <button className="btn btn-primary btn-sm shrink-0 font-semibold" onClick={onEnter}>
+              <Icon name="lock" size={13} /> <span>{lang === "hi" ? "वॉल्ट" : "Vault"}</span>
             </button>
           </div>
         </div>
