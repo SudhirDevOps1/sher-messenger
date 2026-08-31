@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npx tsx --test tests/crypto.test.ts tests/storage-audit.test.ts",
+    "test": "npx tsx --test tests/crypto.test.ts tests/storage-audit.test.ts tests/security-audit.test.ts",
     "hash:pw": "npx tsx scripts/hash-pw.ts",
     "setup:auto": "npx tsx scripts/deploy-setup.ts",
     "deploy:oneclick": "npx tsx scripts/deploy-setup.ts --deploy"
