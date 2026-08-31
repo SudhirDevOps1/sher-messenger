@@ -55,6 +55,8 @@ export default function Page() {
   const [feedbackEmail, setFeedbackEmail] = useState("");
   const [feedbackMsg, setFeedbackMsg] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const contactFormAction = process.env.NEXT_PUBLIC_CONTACT_FORM_ACTION || "";
   const [themeAccent, setThemeAccent] = useState<"emerald" | "blue" | "purple" | "amber" | "rose">(() => {
     try {
@@ -63,6 +65,29 @@ export default function Page() {
       return "emerald";
     }
   });
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) {
+      toast(lang === "hi" ? "ब्राउज़र मेन्यू से 'Add to Home Screen' चुनें" : "Select 'Add to Home screen' from your browser menu", "good");
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setDeferredPrompt(null);
+      toast(lang === "hi" ? "ऐप सफलतापूर्वक इंस्टॉल हो गई!" : "App installed successfully!", "good");
+    }
+  };
 
   const toast = useCallback((msg: string, tone: "good" | "bad" = "good") => {
     const id = toastId.current++;
@@ -465,6 +490,15 @@ export default function Page() {
           >
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: currentTheme.acc }} />
             <span className="hidden lg:inline capitalize text-[11px]">{themeAccent}</span>
+          </button>
+
+          <button
+            className="btn btn-sm shrink-0 !border-[rgba(79,240,182,.35)] !bg-[rgba(79,240,182,.1)] !text-[#a9ffe2] hover:!bg-[rgba(79,240,182,.22)] font-semibold"
+            onClick={handleInstallPWA}
+            title={lang === "hi" ? "मोबाइल या डेस्कटॉप पर ऐप इंस्टॉल करें" : "Install PWA App on Android/iPhone/PC"}
+          >
+            <Icon name="download" size={13} />
+            <span>{lang === "hi" ? "ऐप इंस्टॉल" : "Install App"}</span>
           </button>
 
           <GitHubStars className="hidden sm:inline-flex shrink-0" />

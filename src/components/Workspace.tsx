@@ -5,6 +5,8 @@ import { type HistMsg, type Room, countdown, fmtBytes, fmtTime } from "@/lib/cli
 import type { KedClient } from "@/lib/client";
 import { Chip, Copyable, EmojiPicker, FireOverlay, Icon, Identicon, TtlRing, useNow } from "./ui";
 import { useI18n } from "@/lib/i18n";
+import { CallModal, type CallSession } from "./CallModal";
+import { CalculatorDecoy } from "./CalculatorDecoy";
 
 /* ------------------------------------------------------------------ shared */
 
@@ -129,6 +131,98 @@ function VoicePlayer({ url, size }: { url: string; name?: string; size: number }
   );
 }
 
+export function VideoRecorder({ onSend, onCancel }: { onSend: (file: File) => void; onCancel: () => void }) {
+  const [seconds, setSeconds] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } },
+          audio: true,
+        });
+        if (!active) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+          ? "video/webm;codecs=vp9,opus"
+          : MediaRecorder.isTypeSupported("video/webm")
+          ? "video/webm"
+          : "video/mp4";
+        const mr = new MediaRecorder(stream, { mimeType });
+        mediaRecorderRef.current = mr;
+        chunksRef.current = [];
+        mr.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+        mr.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: mimeType });
+          const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+          const file = new File([blob], `video_note_${Date.now()}.${ext}`, { type: mimeType });
+          onSend(file);
+        };
+        mr.start(200);
+        timerRef.current = setInterval(() => {
+          setSeconds((s) => {
+            if (s >= 30) {
+              if (mr.state === "recording") mr.stop();
+              return s;
+            }
+            return s + 1;
+          });
+        }, 1000);
+      } catch (err) {
+        console.warn("Video recorder camera error:", err);
+        onCancel();
+      }
+    }
+    void startCamera();
+    return () => {
+      active = false;
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    };
+  }, [onSend, onCancel]);
+
+  const handleStopAndSend = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fadeIn">
+      <div className="flex flex-col items-center gap-5">
+        <div className="relative h-64 w-64 overflow-hidden rounded-full border-4 border-[var(--acc)] bg-black shadow-[0_0_35px_rgba(79,240,182,.3)]">
+          <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover scale-x-[-1]" />
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-red-600/90 px-3 py-0.5 text-xs font-mono font-bold text-white shadow animate-pulse">
+            🔴 {seconds}s / 30s
+          </div>
+        </div>
+        <div className="row gap-4">
+          <button type="button" className="btn btn-sm !border-red-500/50 !bg-red-500/20 text-red-300 rounded-full px-5 py-2" onClick={onCancel}>
+            <Icon name="x" size={16} /> Cancel
+          </button>
+          <button type="button" className="btn btn-sm !border-[var(--acc)] !bg-[var(--acc)] text-black font-bold rounded-full px-6 py-2 shadow-lg hover:brightness-110" onClick={handleStopAndSend}>
+            <Icon name="check" size={16} /> Send Video Note
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
   const att = msg.attachment;
   const [url, setUrl] = useState<string | null>(null);
@@ -137,6 +231,7 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
   const [lightbox, setLightbox] = useState(false);
   const isImage = att?.mime.startsWith("image/") ?? false;
   const isAudio = att?.mime.startsWith("audio/") ?? false;
+  const isVideo = att?.mime.startsWith("video/") ?? false;
 
   useEffect(() => {
     if (!att) return;
@@ -144,14 +239,14 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
     if (cached) {
       setUrl(cached);
       setOpen(true);
-    } else if (isAudio || isImage) {
-      // auto-load voice notes & images
+    } else if (isAudio || isImage || isVideo) {
+      // auto-load voice notes, images & video notes
       void client.loadAttachment(att, msg.roomId).then((u) => {
         setUrl(u);
         setOpen(true);
       }).catch(() => {});
     }
-  }, [att, client, isImage, isAudio, msg.roomId]);
+  }, [att, client, isImage, isAudio, isVideo, msg.roomId]);
 
   if (!att) return null;
   const load = async () => {
@@ -166,6 +261,17 @@ function AttachmentView({ client, msg }: { client: KedClient; msg: HistMsg }) {
 
   if (isAudio && url) {
     return <VoicePlayer url={url} size={att.size} />;
+  }
+
+  if (isVideo && url) {
+    return (
+      <div className="mt-2 flex flex-col items-start gap-1">
+        <div className="relative h-48 w-48 overflow-hidden rounded-full border-2 border-[var(--acc)] bg-black shadow-lg">
+          <video src={url} playsInline controls className="h-full w-full object-cover" />
+        </div>
+        <span className="mono text-[9.5px] text-[var(--ink-faint)]">📹 Encrypted Video Note · {fmtBytes(att.size)}</span>
+      </div>
+    );
   }
 
   return (
@@ -246,6 +352,8 @@ function Bubble({
   peerName,
   onReply,
   onInfo,
+  onPin,
+  searchQuery,
   isGroup,
 }: {
   client: KedClient;
@@ -254,6 +362,8 @@ function Bubble({
   peerName: string;
   onReply: (m: HistMsg) => void;
   onInfo: (m: HistMsg) => void;
+  onPin?: (m: HistMsg) => void;
+  searchQuery?: string;
   isGroup: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -400,6 +510,15 @@ function Bubble({
           >
             <Icon name="copy" size={13} />
           </button>
+          {onPin ? (
+            <button
+              className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10"
+              title="Pin Message to Top"
+              onClick={() => onPin(msg)}
+            >
+              <Icon name="pin" size={13} />
+            </button>
+          ) : null}
           <button className="btn btn-icon btn-sm !h-7 !w-7 !p-0 !border-transparent !bg-transparent hover:!bg-white/10" title="Ratchet & Crypto Details" onClick={() => onInfo(msg)}>
             <Icon name="key" size={13} />
           </button>
@@ -800,6 +919,12 @@ export function Chat({
 
   const [screenAlert, setScreenAlert] = useState<string | null>(null);
   const [windowBlurred, setWindowBlurred] = useState(false);
+  const [callSession, setCallSession] = useState<CallSession | null>(null);
+  const [stealthDecoy, setStealthDecoy] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pinnedMsgId, setPinnedMsgId] = useState<string | null>(null);
+  const [videoRecording, setVideoRecording] = useState(false);
   const [shieldActive, setShieldActive] = useState(() => {
     try {
       return localStorage.getItem("ked.shield") !== "false";
@@ -949,25 +1074,45 @@ export function Chat({
         </div>
         <div className="row gap-1 sm:gap-1.5 shrink-0">
           <button
-            className="btn btn-sm !border-[rgba(255,100,50,.5)] !bg-[rgba(255,80,0,.14)] !text-[#ff9d5c] hover:!bg-[rgba(255,80,0,.28)] shadow-[0_0_15px_rgba(255,100,0,.25)] px-2 sm:px-3"
+            className="btn btn-sm px-2 text-[var(--acc)] hover:!bg-[rgba(79,240,182,.12)]"
+            title={lang === "hi" ? "P2P एन्क्रिप्टेड वॉइस कॉल" : "E2EE Voice Call"}
+            onClick={() => setCallSession({ roomId: room.id, peerName: name, isVideo: false })}
+          >
+            <Icon name="phone" size={13} />
+          </button>
+          <button
+            className="btn btn-sm px-2 text-[var(--acc)] hover:!bg-[rgba(79,240,182,.12)]"
+            title={lang === "hi" ? "P2P एन्क्रिप्टेड वीडियो कॉल" : "E2EE Video Call"}
+            onClick={() => setCallSession({ roomId: room.id, peerName: name, isVideo: true })}
+          >
+            <Icon name="video" size={13} />
+          </button>
+          <button
+            className={`btn btn-sm px-2 ${showSearch ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
+            title={lang === "hi" ? "चैट में खोजें" : "Search in conversation"}
+            onClick={() => {
+              setShowSearch((v) => !v);
+              if (showSearch) setSearchQuery("");
+            }}
+          >
+            <Icon name="search" size={13} />
+          </button>
+          <button
+            className="btn btn-sm !border-[rgba(255,100,50,.5)] !bg-[rgba(255,80,0,.14)] !text-[#ff9d5c] hover:!bg-[rgba(255,80,0,.28)] shadow-[0_0_15px_rgba(255,100,0,.25)] px-2 sm:px-2.5"
             title="DuckDuckGo-style Fire Button: Burn & Shred Room History"
             onClick={handleBurnRoom}
           >
-            <Icon name="flame" size={13} /> <span className="hidden sm:inline">Fire Burn</span>
+            <Icon name="flame" size={13} /> <span className="hidden sm:inline">Burn</span>
           </button>
           <button
-            className="btn btn-sm px-2 sm:px-3"
-            title="Cycle auto-burn for this room"
-            onClick={() => {
-              const choices = [null, 30_000, 300_000, 3_600_000];
-              const next = choices[(choices.indexOf(room.ttl ?? null) + 1) % choices.length];
-              void client.setRoomTtl(room.id, next);
-            }}
+            className="btn btn-sm px-2 text-gray-400 hover:text-white"
+            title={lang === "hi" ? "स्टेल्थ कैलकुलेटर मोड" : "Stealth Calculator Camouflage"}
+            onClick={() => setStealthDecoy(true)}
           >
-            <Icon name="flame" size={13} /> <span className="hidden sm:inline">{room.ttl ? `${Math.round(room.ttl / 1000)}s` : "burn off"}</span>
+            <Icon name="calculator" size={13} />
           </button>
           <button
-            className={`btn btn-sm px-2 sm:px-3 ${shieldActive ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
+            className={`btn btn-sm px-2 ${shieldActive ? "!border-[var(--acc)] !bg-[rgba(79,240,182,.15)] text-[var(--acc)]" : ""}`}
             title="Toggle Anti-Snoop Shield (Auto-blurs chat when window loses focus)"
             onClick={() => {
               setShieldActive((prev) => {
@@ -979,7 +1124,7 @@ export function Chat({
               });
             }}
           >
-            <Icon name="shield" size={13} /> <span className="hidden sm:inline">{shieldActive ? (lang === "hi" ? "शील्ड चालू" : "Shield On") : (lang === "hi" ? "शील्ड" : "Shield")}</span>
+            <Icon name="shield" size={13} />
           </button>
           <button
             className="btn btn-icon btn-sm"
@@ -990,6 +1135,53 @@ export function Chat({
           </button>
         </div>
       </header>
+
+      {showSearch ? (
+        <div className="row items-center gap-2 border-b border-[var(--line)] bg-black/40 px-3 py-1.5 z-10 animate-fadeIn">
+          <Icon name="search" size={13} className="text-[var(--acc)] shrink-0" />
+          <input
+            type="text"
+            className="input mono flex-1 !py-1 text-xs"
+            placeholder={lang === "hi" ? "सुरक्षित मेमोरी में संदेश खोजें..." : "Search decrypted messages..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            autoFocus
+          />
+          {searchQuery.trim() ? (
+            <span className="mono text-[10.5px] text-[var(--ink-faint)] shrink-0">
+              {list.filter((m) => !m.destroyed && m.text.toLowerCase().includes(searchQuery.trim().toLowerCase())).length} {lang === "hi" ? "परिणाम" : "matches"}
+            </span>
+          ) : null}
+          <button className="btn btn-icon btn-sm !p-1" onClick={() => { setShowSearch(false); setSearchQuery(""); }}>
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      ) : null}
+
+      {pinnedMsgId && list.find((m) => m.id === pinnedMsgId && !m.destroyed) ? (
+        <div className="row items-center justify-between gap-2 border-b border-[var(--line)] bg-[rgba(79,240,182,.06)] px-3 py-1.5 text-xs text-[var(--ink)]">
+          <div
+            className="row min-w-0 flex-1 cursor-pointer items-center gap-2"
+            onClick={() => {
+              const el = document.getElementById(`msg-${pinnedMsgId}`);
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          >
+            <Icon name="pin" size={12} className="text-[var(--acc)] shrink-0" />
+            <span className="truncate font-mono text-[11px] text-[var(--ink-dim)]">
+              <strong className="text-[var(--ink)]">{lang === "hi" ? "पिन संदेश: " : "Pinned: "}</strong>
+              {list.find((m) => m.id === pinnedMsgId)?.text.slice(0, 70)}
+            </span>
+          </div>
+          <button
+            className="btn btn-icon btn-sm !p-0.5 text-[var(--ink-faint)] hover:text-white"
+            title="Unpin"
+            onClick={() => setPinnedMsgId(null)}
+          >
+            <Icon name="x" size={11} />
+          </button>
+        </div>
+      ) : null}
 
       {screenAlert ? (
         <div className="mx-4 mt-2 row items-center justify-between gap-2 rounded-xl border border-[rgba(255,107,122,.5)] bg-[rgba(255,107,122,.18)] px-3 py-2 text-xs font-semibold text-[#ffc2c9] shadow-lg animate-pulse z-20">
@@ -1017,7 +1209,7 @@ export function Chat({
           const prev = list[i - 1] ?? null;
           const newDay = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
           return (
-            <div key={m.id}>
+            <div key={m.id} id={`msg-${m.id}`} className={searchQuery.trim() && m.text.toLowerCase().includes(searchQuery.trim().toLowerCase()) ? "rounded-xl bg-[rgba(79,240,182,.08)] p-1 transition-all" : ""}>
               {newDay ? (
                 <div className="mono my-3 text-center text-[9.5px] uppercase tracking-[0.2em] text-[var(--ink-faint)]">{dayLabel(m.at)}</div>
               ) : null}
@@ -1028,6 +1220,8 @@ export function Chat({
                 peerName={m.me ? client.username : client.data.contacts[m.from]?.username ?? m.from.slice(0, 8)}
                 onReply={setReply}
                 onInfo={onInfo}
+                onPin={(msg) => setPinnedMsgId(msg.id)}
+                searchQuery={searchQuery}
                 isGroup={room.type === "group"}
               />
             </div>
@@ -1093,6 +1287,14 @@ export function Chat({
                   onClick={() => void startVoiceRecording()}
                 >
                   <Icon name="mic" size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-icon btn-sm !border-transparent !bg-transparent shrink-0 text-cyan-300 hover:bg-white/5"
+                  title="Record round video note"
+                  onClick={() => setVideoRecording(true)}
+                >
+                  <Icon name="camera" size={16} />
                 </button>
                 <div className="relative shrink-0">
                   <button
@@ -1177,6 +1379,29 @@ export function Chat({
           <span className="mono hidden md:inline text-[9.5px] text-[var(--ink-faint)]">enter send · shift+enter newline</span>
         </div>
       </footer>
+
+      {videoRecording ? (
+        <VideoRecorder
+          onSend={(file) => {
+            setVideoRecording(false);
+            void send(file);
+          }}
+          onCancel={() => setVideoRecording(false)}
+        />
+      ) : null}
+
+      {callSession ? (
+        <CallModal
+          client={client}
+          session={callSession}
+          onClose={() => setCallSession(null)}
+          lang={lang}
+        />
+      ) : null}
+
+      {stealthDecoy ? (
+        <CalculatorDecoy onUnlock={() => setStealthDecoy(false)} />
+      ) : null}
     </section>
   );
 }
